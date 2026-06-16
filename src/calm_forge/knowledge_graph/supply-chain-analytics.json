@@ -1,0 +1,175 @@
+{
+  "@context": "https://calmforge.io/kg/v1/context.jsonld",
+  "@type": "Workload",
+  "@id": "workload:supply-chain-analytics",
+  "version": "1.0.0",
+  "name": "supply-chain-analytics",
+  "purpose": "Multi-cloud supply chain analytics platform. Anti-data-gravity: portable state, no proprietary managed service binding.",
+  "owner": "supply-chain-platform",
+  "compliance_scope": [
+    "SOC2:CC6.1",
+    "SOC2:CC7.2",
+    "SOC2:CC9.2"
+  ],
+  "declared_capabilities": [
+    "encryption_at_rest",
+    "external_state_management",
+    "high_throughput_io",
+    "http_read",
+    "http_write",
+    "memory_bandwidth_min_256gb",
+    "mtls_client",
+    "packet_offload",
+    "sub_millisecond_read"
+  ],
+  "nodes": [
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:supply-chain-analytics:event-ingest",
+      "name": "event-ingest",
+      "role": "stream-consumer",
+      "declared_capabilities": [
+        "http_read",
+        "packet_offload",
+        "high_throughput_io"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:supply-chain-analytics:analytics-engine",
+      "name": "analytics-engine",
+      "role": "compute-worker",
+      "declared_capabilities": [
+        "memory_bandwidth_min_256gb",
+        "high_throughput_io"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:supply-chain-analytics:portable-store",
+      "name": "portable-store",
+      "role": "state-manager",
+      "declared_capabilities": [
+        "external_state_management",
+        "sub_millisecond_read",
+        "encryption_at_rest"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:supply-chain-analytics:api-surface",
+      "name": "api-surface",
+      "role": "api-gateway",
+      "declared_capabilities": [
+        "http_read",
+        "http_write",
+        "mtls_client"
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "@type": "Policy",
+      "@id": "workload:supply-chain-analytics:policy:data-residency",
+      "predicate_type": "compliance_boundary",
+      "subject": "workload:supply-chain-analytics",
+      "allowed_regions": [
+        "us-east-1",
+        "us-west-2",
+        "eu-west-1",
+        "ap-southeast-1"
+      ],
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.region_constraint",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:supply-chain-analytics:policy:capability-ceiling",
+      "predicate_type": "capability_ceiling",
+      "subject": "workload:supply-chain-analytics",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.manifest.capability_subset_check",
+      "rationale": "Runtime Agent capabilities must not exceed declared Workload capabilities (manifests_as invariant)",
+      "provenance": "authored"
+    }
+  ],
+  "edges": [
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:event-ingest",
+      "to": "capability:http_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:event-ingest",
+      "to": "capability:packet_offload"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:event-ingest",
+      "to": "capability:high_throughput_io"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:analytics-engine",
+      "to": "capability:memory_bandwidth_min_256gb"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:analytics-engine",
+      "to": "capability:high_throughput_io"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:portable-store",
+      "to": "capability:external_state_management"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:portable-store",
+      "to": "capability:sub_millisecond_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:portable-store",
+      "to": "capability:encryption_at_rest"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:api-surface",
+      "to": "capability:http_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:api-surface",
+      "to": "capability:http_write"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:supply-chain-analytics:api-surface",
+      "to": "capability:mtls_client"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:supply-chain-analytics",
+      "to": "compliance:SOC2:CC6.1"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:supply-chain-analytics",
+      "to": "compliance:SOC2:CC7.2"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:supply-chain-analytics",
+      "to": "compliance:SOC2:CC9.2"
+    }
+  ],
+  "review_required": false,
+  "_provenance": {
+    "authored_by": "calm-forge/interview",
+    "authored_at": "2026-05-04T02:46:22.151251+00:00",
+    "provenance": "authored"
+  }
+}

@@ -1,0 +1,251 @@
+{
+    "$schema": "https://uhccp.internal/patterns/fsi-microservices-mesh.pattern.json",
+    "$id": "https://uhccp.internal/architectures/digital-banking-platform.architecture.json",
+    "title": "Digital Banking Platform — Production Architecture (Microservices Mesh)",
+    "nodes": [
+        {
+            "unique-id": "api-gateway",
+            "node-type": "service",
+            "name": "API Gateway",
+            "description": "Public-facing API gateway — rate limiting, auth, request routing",
+            "container-image": "registry.internal/digital-banking/api-gateway:2.4.0",
+            "replicas": 4,
+            "cpu-request": "1000m",
+            "memory-request": "1Gi",
+            "ingress": true,
+            "rate-limit-rps": 10000
+        },
+        {
+            "unique-id": "account-service",
+            "node-type": "service",
+            "name": "Account Service",
+            "description": "Account management — balance queries, account lifecycle",
+            "container-image": "registry.internal/digital-banking/account-service:1.8.3",
+            "replicas": 3,
+            "cpu-request": "500m",
+            "memory-request": "512Mi"
+        },
+        {
+            "unique-id": "payment-service",
+            "node-type": "service",
+            "name": "Payment Service",
+            "description": "Payment initiation and processing — PCI Zone 1",
+            "container-image": "registry.internal/digital-banking/payment-service:1.6.1",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "1Gi",
+            "pci-zone": 1
+        },
+        {
+            "unique-id": "notification-service",
+            "node-type": "service",
+            "name": "Notification Service",
+            "description": "Email, SMS, and push notification delivery",
+            "container-image": "registry.internal/digital-banking/notification-service:1.3.0",
+            "replicas": 2,
+            "cpu-request": "250m",
+            "memory-request": "256Mi"
+        },
+        {
+            "unique-id": "fraud-detection",
+            "node-type": "service",
+            "name": "Fraud Detection Service",
+            "description": "Real-time fraud scoring — ML inference engine",
+            "container-image": "registry.internal/digital-banking/fraud-detection:2.1.0",
+            "replicas": 3,
+            "cpu-request": "2000m",
+            "memory-request": "4Gi",
+            "gpu-request": "0"
+        },
+        {
+            "unique-id": "auth-service",
+            "node-type": "service",
+            "name": "Auth Service",
+            "description": "OAuth2/OIDC token issuance, session management, MFA",
+            "container-image": "registry.internal/digital-banking/auth-service:1.5.2",
+            "replicas": 3,
+            "cpu-request": "500m",
+            "memory-request": "512Mi"
+        },
+        {
+            "unique-id": "redis-cache",
+            "node-type": "cache",
+            "name": "Redis Cache",
+            "description": "Session store and fraud model cache — Redis Sentinel HA",
+            "engine": "redis",
+            "version": "7.2",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "20Gi",
+            "replicas": 3
+        },
+        {
+            "unique-id": "postgres-accounts",
+            "node-type": "database",
+            "name": "Accounts Database",
+            "description": "PostgreSQL — account data, PCI cardholder environment",
+            "engine": "postgresql",
+            "version": "15.4",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "200Gi"
+        },
+        {
+            "unique-id": "postgres-payments",
+            "node-type": "database",
+            "name": "Payments Database",
+            "description": "PostgreSQL — payment transaction records, PCI Zone 1",
+            "engine": "postgresql",
+            "version": "15.4",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "500Gi",
+            "pci-zone": 1
+        },
+        {
+            "unique-id": "ocp-cluster",
+            "node-type": "system",
+            "name": "Target OCP Cluster",
+            "description": "Resolved by Placement Engine"
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "gateway-to-account",
+            "description": "API Gateway routes account requests to Account Service via mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-gateway", "interfaces": ["https-8443"] },
+                    "destination": { "node": "account-service", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "gateway-to-payment",
+            "description": "API Gateway routes payment requests to Payment Service via mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-gateway", "interfaces": ["https-8443"] },
+                    "destination": { "node": "payment-service", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "gateway-to-auth",
+            "description": "API Gateway delegates authentication to Auth Service via mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-gateway", "interfaces": ["https-8443"] },
+                    "destination": { "node": "auth-service", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "account-to-db",
+            "description": "Account Service connects to Accounts DB with Vault dynamic credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "account-service" },
+                    "destination": { "node": "postgres-accounts", "interfaces": ["postgres-5432"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials"
+        },
+        {
+            "unique-id": "payment-to-db",
+            "description": "Payment Service connects to Payments DB with Vault dynamic credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "payment-service" },
+                    "destination": { "node": "postgres-payments", "interfaces": ["postgres-5432"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials"
+        },
+        {
+            "unique-id": "payment-to-fraud",
+            "description": "Payment Service calls Fraud Detection for sync fraud scoring before processing",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "payment-service", "interfaces": ["https-8443"] },
+                    "destination": { "node": "fraud-detection", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "payment-to-notification",
+            "description": "Payment Service sends async payment confirmation to Notification Service",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "payment-service", "interfaces": ["https-8443"] },
+                    "destination": { "node": "notification-service", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "auth-to-redis",
+            "description": "Auth Service stores sessions in Redis with Vault KV credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "auth-service" },
+                    "destination": { "node": "redis-cache", "interfaces": ["redis-6379"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-kv-credentials"
+        },
+        {
+            "unique-id": "fraud-to-redis",
+            "description": "Fraud Detection reads model cache from Redis with Vault KV credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "fraud-detection" },
+                    "destination": { "node": "redis-cache", "interfaces": ["redis-6379"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-kv-credentials"
+        },
+        {
+            "unique-id": "deployed-on-ocp",
+            "description": "All components deployed on target OCP cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "ocp-cluster",
+                    "nodes": [
+                        "api-gateway",
+                        "account-service",
+                        "payment-service",
+                        "notification-service",
+                        "fraud-detection",
+                        "auth-service",
+                        "redis-cache",
+                        "postgres-accounts",
+                        "postgres-payments"
+                    ]
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "application-name": "digital-banking-platform",
+        "team": "digital-banking-engineering",
+        "cost-center": "CC-7830",
+        "compliance-scope": "pci-dss",
+        "data-classification": "confidential",
+        "sla-tier": "platinum",
+        "service-mesh": true,
+        "service-mesh-provider": "istio",
+        "requestor": "vault:identity/oidc/mwilliams",
+        "request-timestamp": "2026-03-05T10:00:00Z"
+    }
+}

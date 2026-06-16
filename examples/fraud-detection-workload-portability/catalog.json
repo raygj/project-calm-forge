@@ -1,0 +1,31 @@
+{
+    "catalog-version": "1.1",
+    "description": "Fraud Detection Pipeline Module Catalog — capability-matched modules, ISA-agnostic",
+    "modules": {
+        "service": {
+            "default": "registry.terraform.io/financial-crimes/ocp-service/v2.0.0",
+            "variants": {
+                "confidential-inference": {
+                    "source": "registry.terraform.io/financial-crimes/confidential-compute-workload/v1.0.0",
+                    "description": "TEE-enabled inference workload — resolves to Intel TDX, AMD SEV-SNP, or ARM CCA. No ISA binding.",
+                    "match": {"node-type": "service", "capability-profile": "confidential-inference"}
+                },
+                "portable-state": {
+                    "source": "registry.terraform.io/financial-crimes/portable-state-layer/v1.0.0",
+                    "description": "Portable Redis-compatible state — Valkey or equivalent. No managed service binding.",
+                    "match": {"node-type": "service", "capability-profile": "portable-state"}
+                },
+                "network-offload": {
+                    "source": "registry.terraform.io/financial-crimes/network-offload-service/v1.0.0",
+                    "description": "SmartNIC/xDPU-aware service — packet offload preferred, degrades gracefully.",
+                    "match": {"node-type": "service", "capability-profile": "network-offload"}
+                }
+            }
+        },
+        "vault-pki": {
+            "source": "registry.terraform.io/financial-crimes/vault-pki-mtls/v2.0.0",
+            "description": "Vault PKI — EC-256 certs, 24h TTL, per-service roles",
+            "match": {"authentication": "mTLS-vault-pki"}
+        }
+    }
+}

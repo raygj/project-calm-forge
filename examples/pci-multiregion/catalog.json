@@ -1,0 +1,36 @@
+{
+    "catalog-version": "1.1",
+    "description": "PCI Multi-Region Module Catalog — AWS multi-AZ, CrunchyData, HashiCorp Vault",
+    "modules": {
+        "service": {
+            "default": "registry.terraform.io/payments/ocp-service/v3.0.0",
+            "variants": {
+                "ocp-deployment": {
+                    "source": "registry.terraform.io/payments/ocp-deployment/v3.0.0",
+                    "description": "OCP Deployment with mTLS, HPA, PodDisruptionBudget",
+                    "match": { "node-type": "service" }
+                }
+            }
+        },
+        "database": {
+            "default": "registry.terraform.io/payments/rds-postgres-multiregion/v2.0.0",
+            "variants": {
+                "rds-postgresql-aws": {
+                    "source": "registry.terraform.io/payments/aws-rds-postgres-encrypted/v2.0.0",
+                    "description": "AWS RDS PostgreSQL — AES-256 at rest, TLS in transit, automated backups",
+                    "match": { "node-type": "database", "engine": "postgresql", "cloud-provider": "aws" }
+                }
+            }
+        },
+        "vault-pki": {
+            "source": "registry.terraform.io/payments/vault-pki-mtls/v2.0.0",
+            "description": "Vault PKI — EC-256 certs, 24h TTL, per-service roles, PCI req-4 TLS enforcement",
+            "match": { "authentication": "mTLS-vault-pki" }
+        },
+        "vault-dynamic-creds": {
+            "source": "registry.terraform.io/payments/vault-dynamic-db-creds/v2.0.0",
+            "description": "Vault dynamic DB creds — 30min TTL, per-service roles, PCI req-8 credential rotation",
+            "match": { "authentication": "vault-dynamic-credentials" }
+        }
+    }
+}

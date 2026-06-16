@@ -1,0 +1,71 @@
+{
+    "$schema": "https://uhccp.internal/decorators/multiregion-deployment.decorator.schema.json",
+    "unique-id": "portfolio-platform-prod-multiregion-001",
+    "type": "deployment",
+    "target": ["portfolio-platform.architecture.json"],
+    "applies-to": ["ocp-useast", "ocp-uswest", "ocp-euwest"],
+    "data": {
+        "deployment-start-time": "2026-03-05T10:05:00Z",
+        "deployment-status": "pending",
+        "deployment-strategy": "multi-region-active-active-read",
+        "regions": {
+            "us-east-1": {
+                "role": "primary",
+                "access-scope": "read-write",
+                "kubernetes": {
+                    "cluster": "prod-useast-ocp-01",
+                    "namespace": "portfolio-platform-prod",
+                    "helm-chart": "uhccp-mongodb-multiregion:1.0.0"
+                },
+                "cloud-provider": "aws",
+                "vault-addr": "https://vault.production.useast.uhccp.internal:8200",
+                "components": ["portfolio-api-useast", "mongodb-primary"],
+                "placement-rationale": "Primary write region, lowest latency to NYSE/NASDAQ feeds, SOX audit trail colocation"
+            },
+            "us-west-2": {
+                "role": "secondary",
+                "access-scope": "read-only",
+                "kubernetes": {
+                    "cluster": "prod-uswest-ocp-01",
+                    "namespace": "portfolio-platform-prod",
+                    "helm-chart": "uhccp-mongodb-multiregion:1.0.0"
+                },
+                "cloud-provider": "aws",
+                "vault-addr": "https://vault.production.uswest.uhccp.internal:8200",
+                "components": ["portfolio-api-uswest", "mongodb-secondary-uswest"],
+                "placement-rationale": "US-West read replica for West Coast latency, DR failover candidate"
+            },
+            "eu-west-1": {
+                "role": "secondary",
+                "access-scope": "read-only",
+                "gdpr-data-residency": true,
+                "kubernetes": {
+                    "cluster": "prod-euwest-ocp-01",
+                    "namespace": "portfolio-platform-prod",
+                    "helm-chart": "uhccp-mongodb-multiregion:1.0.0"
+                },
+                "cloud-provider": "aws",
+                "vault-addr": "https://vault.production.euwest.uhccp.internal:8200",
+                "components": ["portfolio-api-euwest", "mongodb-secondary-euwest"],
+                "placement-rationale": "EU data residency for GDPR-scoped client data, MiFID II reporting locality"
+            }
+        },
+        "replication": {
+            "replica-set-name": "portfolio-rs0",
+            "primary-region": "us-east-1",
+            "replication-type": "async",
+            "max-replication-lag-ms": 5000,
+            "encryption": "mTLS-vault-pki",
+            "cross-region-network": "vpc-peering"
+        },
+        "failover": {
+            "rpo-seconds": 10,
+            "rto-seconds": 120,
+            "auto-failover": false,
+            "failover-priority": ["us-west-2", "eu-west-1"],
+            "approval-required": true
+        },
+        "environment": "production",
+        "placement-rationale-ref": "placement-rationale-portfolio-platform-prod-multiregion-001.json"
+    }
+}

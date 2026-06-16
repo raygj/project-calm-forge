@@ -1,0 +1,12 @@
+{
+  "@context": "https://calm.finos.org/patterns/v1",
+  "@type": "ArchitecturePattern",
+  "name": "single-service",
+  "description": "Minimal single-service deployment pattern",
+  "tags": ["simple", "single-service"],
+  "required_node_types": ["service"],
+  "required_relationships": [],
+  "compliance_mappings": [],
+  "placement_rules": [],
+  "cost_model": {"tier": "low", "notes": "Single replica acceptable for non-prod"}
+}

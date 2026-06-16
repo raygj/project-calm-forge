@@ -1,0 +1,186 @@
+{
+  "@context": "https://calmforge.io/kg/v1/context.jsonld",
+  "@type": "Workload",
+  "@id": "workload:healthcare-hl7-pipeline",
+  "version": "1.0.0",
+  "name": "healthcare-hl7-pipeline",
+  "purpose": "HIPAA-compliant HL7 FHIR ingestion and routing pipeline for EHR interoperability.",
+  "owner": "health-data-platform",
+  "compliance_scope": [
+    "HIPAA:164.312.a.1",
+    "HIPAA:164.312.a.2",
+    "HIPAA:164.312.b",
+    "HIPAA:164.312.c.1",
+    "HIPAA:164.314.b.2"
+  ],
+  "declared_capabilities": [
+    "confidential_compute",
+    "encryption_at_rest",
+    "http_read",
+    "http_write",
+    "immutable_audit_log",
+    "mtls_client",
+    "pii_read",
+    "pii_write",
+    "sub_millisecond_read",
+    "vault_dynamic_creds"
+  ],
+  "nodes": [
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:healthcare-hl7-pipeline:fhir-gateway",
+      "name": "fhir-gateway",
+      "role": "api-gateway",
+      "declared_capabilities": [
+        "http_read",
+        "http_write",
+        "mtls_client",
+        "vault_dynamic_creds"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:healthcare-hl7-pipeline:hl7-transformer",
+      "name": "hl7-transformer",
+      "role": "stream-processor",
+      "declared_capabilities": [
+        "confidential_compute",
+        "pii_read",
+        "pii_write"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:healthcare-hl7-pipeline:patient-index",
+      "name": "patient-index",
+      "role": "state-manager",
+      "declared_capabilities": [
+        "encryption_at_rest",
+        "sub_millisecond_read"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:healthcare-hl7-pipeline:audit-emitter",
+      "name": "audit-emitter",
+      "role": "event-producer",
+      "declared_capabilities": [
+        "http_write",
+        "immutable_audit_log"
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "@type": "Policy",
+      "@id": "workload:healthcare-hl7-pipeline:policy:data-residency",
+      "predicate_type": "compliance_boundary",
+      "subject": "workload:healthcare-hl7-pipeline",
+      "allowed_regions": [
+        "us-east-1",
+        "us-west-2"
+      ],
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.region_constraint",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:healthcare-hl7-pipeline:policy:capability-ceiling",
+      "predicate_type": "capability_ceiling",
+      "subject": "workload:healthcare-hl7-pipeline",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.manifest.capability_subset_check",
+      "rationale": "Runtime Agent capabilities must not exceed declared Workload capabilities (manifests_as invariant)",
+      "provenance": "authored"
+    }
+  ],
+  "edges": [
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:fhir-gateway",
+      "to": "capability:http_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:fhir-gateway",
+      "to": "capability:http_write"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:fhir-gateway",
+      "to": "capability:mtls_client"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:fhir-gateway",
+      "to": "capability:vault_dynamic_creds"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:hl7-transformer",
+      "to": "capability:confidential_compute"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:hl7-transformer",
+      "to": "capability:pii_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:hl7-transformer",
+      "to": "capability:pii_write"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:patient-index",
+      "to": "capability:encryption_at_rest"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:patient-index",
+      "to": "capability:sub_millisecond_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:audit-emitter",
+      "to": "capability:http_write"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:healthcare-hl7-pipeline:audit-emitter",
+      "to": "capability:immutable_audit_log"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:healthcare-hl7-pipeline",
+      "to": "compliance:HIPAA:164.312.a.1"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:healthcare-hl7-pipeline",
+      "to": "compliance:HIPAA:164.312.a.2"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:healthcare-hl7-pipeline",
+      "to": "compliance:HIPAA:164.312.b"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:healthcare-hl7-pipeline",
+      "to": "compliance:HIPAA:164.312.c.1"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:healthcare-hl7-pipeline",
+      "to": "compliance:HIPAA:164.314.b.2"
+    }
+  ],
+  "review_required": false,
+  "_provenance": {
+    "authored_by": "calm-forge/interview",
+    "authored_at": "2026-05-04T02:46:22.150917+00:00",
+    "provenance": "authored"
+  }
+}

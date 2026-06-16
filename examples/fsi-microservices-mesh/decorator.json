@@ -1,0 +1,26 @@
+{
+    "$schema": "https://uhccp.internal/decorators/ocp-deployment.decorator.schema.json",
+    "unique-id": "digital-banking-platform-prod-placement-001",
+    "type": "deployment",
+    "target": ["digital-banking-platform.architecture.json"],
+    "applies-to": ["ocp-cluster"],
+    "data": {
+        "deployment-start-time": "2026-03-05T10:05:00Z",
+        "deployment-status": "pending",
+        "kubernetes": {
+            "cluster": "prod-uksouth-ocp-03",
+            "namespace": "digital-banking-prod",
+            "helm-chart": "uhccp-microservices-mesh:2.0.0"
+        },
+        "cloud-provider": "azure",
+        "region": "uksouth",
+        "environment": "production",
+        "service-mesh": {
+            "enabled": true,
+            "provider": "istio",
+            "version": "1.20",
+            "mtls-mode": "STRICT"
+        },
+        "placement-rationale-ref": "placement-rationale-digital-banking-platform-prod-001.json"
+    }
+}

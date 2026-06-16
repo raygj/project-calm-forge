@@ -1,0 +1,154 @@
+{
+    "$schema": "https://finos.org/calm/patterns/pci-multiregion-payments.pattern.json",
+    "$id": "https://payments.internal/architectures/pci-multiregion-payments.architecture.json",
+    "title": "PCI Multi-Region Payments — Production Architecture",
+    "nodes": [
+        {
+            "unique-id": "glb",
+            "node-type": "service",
+            "name": "Global Load Balancer",
+            "description": "Active-active global traffic manager — PCI DSS v4 req-1 network segmentation",
+            "container-image": "registry.internal/payments/glb:2.1.0",
+            "replicas": 2,
+            "cpu-request": "250m",
+            "memory-request": "256Mi"
+        },
+        {
+            "unique-id": "api-us-east",
+            "node-type": "service",
+            "name": "Payment API — US East",
+            "description": "Cardholder data processor — PCI CDE Zone, us-east-1",
+            "container-image": "registry.internal/payments/api:4.1.2",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "2Gi"
+        },
+        {
+            "unique-id": "api-eu-west",
+            "node-type": "service",
+            "name": "Payment API — EU West",
+            "description": "Cardholder data processor — PCI CDE Zone, eu-west-1 (GDPR + PCI DSS v4)",
+            "container-image": "registry.internal/payments/api:4.1.2",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "2Gi"
+        },
+        {
+            "unique-id": "db-primary",
+            "node-type": "database",
+            "name": "Cardholder Data — Primary (US East)",
+            "description": "PostgreSQL — PCI DSS v4 req-3 stored cardholder data, encrypted at rest, us-east-1",
+            "engine": "postgresql",
+            "version": "15.4",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "500Gi",
+            "cloud-provider": "aws"
+        },
+        {
+            "unique-id": "db-replica",
+            "node-type": "database",
+            "name": "Cardholder Data — Replica (EU West)",
+            "description": "PostgreSQL — read replica for GDPR data residency, eu-west-1, encrypted at rest",
+            "engine": "postgresql",
+            "version": "15.4",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "500Gi",
+            "cloud-provider": "aws"
+        },
+        {
+            "unique-id": "infra-us-east",
+            "node-type": "system",
+            "name": "OCP Cluster — US East",
+            "description": "us-east-1 execution environment — resolved by DCM Placement API"
+        },
+        {
+            "unique-id": "infra-eu-west",
+            "node-type": "system",
+            "name": "OCP Cluster — EU West",
+            "description": "eu-west-1 execution environment — resolved by DCM Placement API"
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "glb-to-api-us",
+            "description": "GLB routes to US East API over mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "glb", "interfaces": ["https-443"] },
+                    "destination": { "node": "api-us-east", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "glb-to-api-eu",
+            "description": "GLB routes to EU West API over mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "glb", "interfaces": ["https-443"] },
+                    "destination": { "node": "api-eu-west", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "api-us-to-db-primary",
+            "description": "US API reads/writes primary cardholder data store with Vault dynamic creds",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-us-east" },
+                    "destination": { "node": "db-primary", "interfaces": ["postgres-5432"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials"
+        },
+        {
+            "unique-id": "api-eu-to-db-replica",
+            "description": "EU API reads replica for GDPR data residency compliance with Vault dynamic creds",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-eu-west" },
+                    "destination": { "node": "db-replica", "interfaces": ["postgres-5432"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials"
+        },
+        {
+            "unique-id": "deployed-us-east",
+            "description": "US workloads deployed on us-east-1 cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "infra-us-east",
+                    "nodes": ["glb", "api-us-east", "db-primary"]
+                }
+            }
+        },
+        {
+            "unique-id": "deployed-eu-west",
+            "description": "EU workloads deployed on eu-west-1 cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "infra-eu-west",
+                    "nodes": ["api-eu-west", "db-replica"]
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "application-name": "pci-multiregion-payments",
+        "team": "payments-platform",
+        "cost-center": "CC-9900",
+        "compliance-scope": "pci-dss",
+        "compliance-version": "PCI-DSS-v4",
+        "data-classification": "cardholder-data",
+        "data-residency": ["us-east-1", "eu-west-1"],
+        "sla-tier": "platinum",
+        "recertification-cycle": "annual",
+        "requestor": "vault:identity/oidc/platform-team",
+        "request-timestamp": "2026-04-21T00:00:00Z"
+    }
+}

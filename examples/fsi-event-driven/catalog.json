@@ -1,0 +1,61 @@
+{
+    "catalog-version": "1.0",
+    "description": "UHCCP Module Catalog — maps CALM node types to Terraform modules (event-driven)",
+    "modules": {
+        "service": {
+            "default": "registry.terraform.io/uhccp/ocp-service/v2.1.0",
+            "variants": {
+                "ocp-deployment": {
+                    "source": "registry.terraform.io/uhccp/ocp-deployment/v2.1.0",
+                    "description": "Standard OCP Deployment with Service, Ingress, HPA",
+                    "match": { "node-type": "service" }
+                }
+            }
+        },
+        "kafka": {
+            "default": "registry.terraform.io/uhccp/kafka-cluster-ocp/v1.2.0",
+            "variants": {
+                "kafka-cluster-ocp": {
+                    "source": "registry.terraform.io/uhccp/kafka-cluster-ocp/v1.2.0",
+                    "description": "Strimzi Kafka Operator on OCP — multi-broker with SASL/SCRAM + TLS",
+                    "match": { "node-type": "kafka" }
+                },
+                "msk-kafka": {
+                    "source": "registry.terraform.io/uhccp/aws-msk-kafka/v1.0.0",
+                    "description": "AWS MSK Kafka (for cloud-native deployments)",
+                    "match": { "node-type": "kafka", "cloud-provider": "aws" }
+                }
+            }
+        },
+        "database": {
+            "default": "registry.terraform.io/uhccp/ocp-database/v1.3.0",
+            "variants": {
+                "postgresql-ocp": {
+                    "source": "registry.terraform.io/uhccp/crunchydata-postgres/v1.3.0",
+                    "description": "CrunchyData PostgreSQL Operator on OCP",
+                    "match": { "node-type": "database", "engine": "postgresql" }
+                },
+                "rds-postgresql": {
+                    "source": "registry.terraform.io/uhccp/aws-rds-postgres/v1.1.0",
+                    "description": "AWS RDS PostgreSQL (for cloud-native deployments)",
+                    "match": { "node-type": "database", "engine": "postgresql", "cloud-provider": "aws" }
+                }
+            }
+        },
+        "vault-pki": {
+            "source": "registry.terraform.io/uhccp/vault-pki-mtls/v1.0.0",
+            "description": "Vault PKI for mTLS between services and Kafka brokers",
+            "match": { "authentication": "mTLS-vault-pki" }
+        },
+        "vault-dynamic-creds": {
+            "source": "registry.terraform.io/uhccp/vault-dynamic-db-creds/v1.0.0",
+            "description": "Vault dynamic database credentials",
+            "match": { "authentication": "vault-dynamic-credentials" }
+        },
+        "vault-kafka-creds": {
+            "source": "registry.terraform.io/uhccp/vault-kv-kafka-sasl/v1.0.0",
+            "description": "Vault KV store for Kafka SASL/SCRAM credentials — per-service isolation",
+            "match": { "authentication": "vault-kafka-sasl-scram" }
+        }
+    }
+}

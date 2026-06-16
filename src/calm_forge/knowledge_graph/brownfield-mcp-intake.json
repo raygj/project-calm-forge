@@ -1,0 +1,173 @@
+{
+  "@context": "https://calmforge.io/kg/v1/context.jsonld",
+  "@type": "Workload",
+  "@id": "workload:legacy-payment-processor:v1",
+  "version": "1.0.0",
+  "name": "legacy-payment-processor",
+  "purpose": "Brownfield payment processor — existing workload being onboarded into the intent graph via MCP intake from Red Hat ACM and Ansible Automation Platform. Demonstrates KG population from live system state, enabling the diff engine to detect drift against reconstructed intent.",
+  "owner": "payments-platform",
+  "declared_capabilities": ["http_read", "http_write", "vault_dynamic_creds"],
+  "_provenance": {
+    "authored_by": "calm-forge/mcp/acm-intake",
+    "authored_at": "2026-04-20T00:00:00Z",
+    "intake_source": "acm-mcp/cluster-service-provider",
+    "intake_version": "1.0.0"
+  },
+
+  "placement_nodes": [
+    {
+      "@type": "Placement",
+      "@id": "placement:legacy-payment-processor:prod-east",
+      "workload_id": "workload:legacy-payment-processor:v1",
+      "environment_id": "env:acm:prod-east-ocp-01",
+      "placed_at": "2025-11-14T09:23:00Z",
+      "placed_by": "acm-mcp/cluster-intake",
+      "attestation_level": "software",
+      "observed_capabilities": ["http_read", "http_write", "vault_dynamic_creds"],
+      "namespace": "payments-prod",
+      "drift_state": {
+        "last_evaluated": null,
+        "status": "pending_first_evaluation",
+        "deviation_hours": null,
+        "findings": []
+      },
+      "_provenance": {
+        "authored_by": "calm-forge/mcp/acm-intake",
+        "authored_at": "2026-04-20T00:00:00Z",
+        "intake_source": "acm-mcp/cluster-service-provider"
+      }
+    },
+    {
+      "@type": "Placement",
+      "@id": "placement:legacy-payment-processor:prod-west",
+      "workload_id": "workload:legacy-payment-processor:v1",
+      "environment_id": "env:acm:prod-west-ocp-01",
+      "placed_at": "2025-11-14T09:25:00Z",
+      "placed_by": "acm-mcp/cluster-intake",
+      "attestation_level": "software",
+      "observed_capabilities": ["http_read", "http_write", "vault_dynamic_creds"],
+      "namespace": "payments-prod",
+      "drift_state": {
+        "last_evaluated": null,
+        "status": "pending_first_evaluation",
+        "deviation_hours": null,
+        "findings": []
+      },
+      "_provenance": {
+        "authored_by": "calm-forge/mcp/acm-intake",
+        "authored_at": "2026-04-20T00:00:00Z",
+        "intake_source": "acm-mcp/cluster-service-provider"
+      }
+    }
+  ],
+
+  "execution_environments": [
+    {
+      "@type": "ExecutionEnvironment",
+      "@id": "env:acm:prod-east-ocp-01",
+      "provider_type": "openshift",
+      "provider_ref": "acm-cluster-sp:prod-east-ocp-01",
+      "advertised_capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds",
+        "encryption_at_rest", "mtls_client"
+      ],
+      "region": "us-east-1",
+      "substrate": "x86",
+      "labels": {
+        "environment": "prod",
+        "compliance": "pci",
+        "managed_by": "acm"
+      },
+      "_provenance": {
+        "authored_by": "calm-forge/mcp/acm-intake",
+        "authored_at": "2026-04-20T00:00:00Z",
+        "intake_source": "acm-mcp/cluster-service-provider",
+        "intake_version": "1.0.0"
+      }
+    },
+    {
+      "@type": "ExecutionEnvironment",
+      "@id": "env:acm:prod-west-ocp-01",
+      "provider_type": "openshift",
+      "provider_ref": "acm-cluster-sp:prod-west-ocp-01",
+      "advertised_capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds",
+        "encryption_at_rest", "mtls_client"
+      ],
+      "region": "us-west-2",
+      "substrate": "x86",
+      "labels": {
+        "environment": "prod",
+        "compliance": "pci",
+        "managed_by": "acm"
+      },
+      "_provenance": {
+        "authored_by": "calm-forge/mcp/acm-intake",
+        "authored_at": "2026-04-20T00:00:00Z",
+        "intake_source": "acm-mcp/cluster-service-provider",
+        "intake_version": "1.0.0"
+      }
+    }
+  ],
+
+  "policies": [
+    {
+      "@type": "Policy",
+      "@id": "workload:legacy-payment-processor:policy:reconstructed-placement",
+      "predicate_type": "placement_constraint",
+      "subject": "workload:legacy-payment-processor",
+      "required_labels": {
+        "compliance": "pci",
+        "environment": "prod"
+      },
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.label_constraint",
+      "provenance": "reconstructed",
+      "rationale": "Reconstructed from observed placement — workload is running on PCI-labelled prod clusters. Treated as declared intent pending human review.",
+      "_provenance": {
+        "authored_by": "calm-forge/mcp/acm-intake",
+        "authored_at": "2026-04-20T00:00:00Z",
+        "intake_source": "acm-mcp/cluster-service-provider"
+      }
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:legacy-payment-processor:policy:drift-detection",
+      "predicate_type": "drift_threshold",
+      "subject": "workload:legacy-payment-processor",
+      "max_deviation_hours": 4,
+      "enforcement_mode": "audit",
+      "evaluated_by": "calm.drift.threshold_check",
+      "provenance": "authored",
+      "rationale": "Brownfield workload — drift detection active from day one of KG onboarding. Any deviation from observed placement surfaces within 4 hours.",
+      "_provenance": {
+        "authored_by": "calm-forge/mcp/acm-intake",
+        "authored_at": "2026-04-20T00:00:00Z"
+      }
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:legacy-payment-processor:policy:capability-gap-alert",
+      "predicate_type": "capability_ceiling",
+      "subject": "workload:legacy-payment-processor",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.manifest.capability_subset_check",
+      "provenance": "authored",
+      "rationale": "If observed_capabilities on any Placement node exceed declared_capabilities on this Workload, it is a schema gap — not a policy violation. Flag immediately for human review and schema update.",
+      "_provenance": {
+        "authored_by": "calm-forge/mcp/acm-intake",
+        "authored_at": "2026-04-20T00:00:00Z"
+      }
+    }
+  ],
+
+  "edges": [
+    { "@type": "placed_on", "from": "workload:legacy-payment-processor:v1", "to": "env:acm:prod-east-ocp-01" },
+    { "@type": "placed_on", "from": "workload:legacy-payment-processor:v1", "to": "env:acm:prod-west-ocp-01" },
+    { "@type": "satisfied_by", "from": "capability:vault_dynamic_creds", "to": "env:acm:prod-east-ocp-01" },
+    { "@type": "satisfied_by", "from": "capability:vault_dynamic_creds", "to": "env:acm:prod-west-ocp-01" },
+    { "@type": "enforced_by", "from": "workload:legacy-payment-processor", "to": "workload:legacy-payment-processor:policy:reconstructed-placement" },
+    { "@type": "enforced_by", "from": "workload:legacy-payment-processor", "to": "workload:legacy-payment-processor:policy:drift-detection" },
+    { "@type": "enforced_by", "from": "workload:legacy-payment-processor", "to": "workload:legacy-payment-processor:policy:capability-gap-alert" }
+  ]
+}

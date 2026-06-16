@@ -1,0 +1,271 @@
+{
+    "$schema": "https://uhccp.internal/patterns/fsi-mongodb-multiregion.pattern.json",
+    "$id": "https://uhccp.internal/architectures/portfolio-platform.architecture.json",
+    "title": "Global Portfolio Management Platform — Multi-Region Production Architecture",
+    "nodes": [
+        {
+            "unique-id": "portfolio-api-useast",
+            "node-type": "service",
+            "name": "Portfolio API — US-East",
+            "description": "Regional API tier for portfolio management, US-East primary",
+            "container-image": "registry.internal/portfolio/api:2.8.0",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "1Gi",
+            "region": "us-east-1",
+            "data-residency": "us"
+        },
+        {
+            "unique-id": "portfolio-api-uswest",
+            "node-type": "service",
+            "name": "Portfolio API — US-West",
+            "description": "Regional API tier for portfolio management, US-West read path",
+            "container-image": "registry.internal/portfolio/api:2.8.0",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "1Gi",
+            "region": "us-west-2",
+            "data-residency": "us"
+        },
+        {
+            "unique-id": "portfolio-api-euwest",
+            "node-type": "service",
+            "name": "Portfolio API — EU-West",
+            "description": "Regional API tier for portfolio management, EU-West read path, GDPR scope",
+            "container-image": "registry.internal/portfolio/api:2.8.0",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "1Gi",
+            "region": "eu-west-1",
+            "data-residency": "eu",
+            "gdpr-scope": true
+        },
+        {
+            "unique-id": "mongodb-primary",
+            "node-type": "database",
+            "name": "MongoDB Primary — US-East",
+            "description": "MongoDB primary node, write region, portfolio and trade data",
+            "engine": "mongodb",
+            "version": "7.0",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "500Gi",
+            "region": "us-east-1",
+            "replica-set-role": "primary",
+            "replica-set-name": "portfolio-rs0",
+            "data-residency": "us"
+        },
+        {
+            "unique-id": "mongodb-secondary-uswest",
+            "node-type": "database",
+            "name": "MongoDB Secondary — US-West",
+            "description": "MongoDB secondary node, read replica for US-West latency optimization",
+            "engine": "mongodb",
+            "version": "7.0",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "500Gi",
+            "region": "us-west-2",
+            "replica-set-role": "secondary",
+            "replica-set-name": "portfolio-rs0",
+            "data-residency": "us"
+        },
+        {
+            "unique-id": "mongodb-secondary-euwest",
+            "node-type": "database",
+            "name": "MongoDB Secondary — EU-West",
+            "description": "MongoDB secondary node, read replica for EU-West, GDPR-scoped client data",
+            "engine": "mongodb",
+            "version": "7.0",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "500Gi",
+            "region": "eu-west-1",
+            "replica-set-role": "secondary",
+            "replica-set-name": "portfolio-rs0",
+            "data-residency": "eu",
+            "gdpr-scope": true
+        },
+        {
+            "unique-id": "global-load-balancer",
+            "node-type": "service",
+            "name": "Global Load Balancer",
+            "description": "DNS-based global traffic routing with geo-proximity and health checks",
+            "service-type": "global-dns-lb",
+            "region": "global"
+        },
+        {
+            "unique-id": "ocp-useast",
+            "node-type": "system",
+            "name": "OCP Cluster — US-East",
+            "description": "Production OCP cluster, US-East, primary write region",
+            "region": "us-east-1"
+        },
+        {
+            "unique-id": "ocp-uswest",
+            "node-type": "system",
+            "name": "OCP Cluster — US-West",
+            "description": "Production OCP cluster, US-West, read replica region",
+            "region": "us-west-2"
+        },
+        {
+            "unique-id": "ocp-euwest",
+            "node-type": "system",
+            "name": "OCP Cluster — EU-West",
+            "description": "Production OCP cluster, EU-West, GDPR-scoped read replica region",
+            "region": "eu-west-1",
+            "gdpr-scope": true
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "glb-to-api-useast",
+            "description": "Global load balancer routes to US-East API tier via geo-proximity",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "global-load-balancer", "interfaces": ["https-443"] },
+                    "destination": { "node": "portfolio-api-useast", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "routing": "geo-proximity",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "glb-to-api-uswest",
+            "description": "Global load balancer routes to US-West API tier via geo-proximity",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "global-load-balancer", "interfaces": ["https-443"] },
+                    "destination": { "node": "portfolio-api-uswest", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "routing": "geo-proximity",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "glb-to-api-euwest",
+            "description": "Global load balancer routes to EU-West API tier via geo-proximity",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "global-load-balancer", "interfaces": ["https-443"] },
+                    "destination": { "node": "portfolio-api-euwest", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "routing": "geo-proximity",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "api-useast-to-mongodb-primary",
+            "description": "US-East API connects to MongoDB primary with read-write dynamic credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "portfolio-api-useast" },
+                    "destination": { "node": "mongodb-primary", "interfaces": ["mongodb-27017"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials",
+            "access-scope": "read-write"
+        },
+        {
+            "unique-id": "api-uswest-to-mongodb-secondary-uswest",
+            "description": "US-West API connects to local MongoDB secondary with read-only dynamic credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "portfolio-api-uswest" },
+                    "destination": { "node": "mongodb-secondary-uswest", "interfaces": ["mongodb-27017"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials",
+            "access-scope": "read-only"
+        },
+        {
+            "unique-id": "api-euwest-to-mongodb-secondary-euwest",
+            "description": "EU-West API connects to local MongoDB secondary with read-only dynamic credentials, GDPR scope",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "portfolio-api-euwest" },
+                    "destination": { "node": "mongodb-secondary-euwest", "interfaces": ["mongodb-27017"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials",
+            "access-scope": "read-only",
+            "gdpr-scope": true
+        },
+        {
+            "unique-id": "replication-primary-to-uswest",
+            "description": "MongoDB replication from primary to US-West secondary via mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "mongodb-primary", "interfaces": ["mongodb-27017"] },
+                    "destination": { "node": "mongodb-secondary-uswest", "interfaces": ["mongodb-27017"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "mTLS-vault-pki",
+            "replication": true,
+            "replication-type": "async"
+        },
+        {
+            "unique-id": "replication-primary-to-euwest",
+            "description": "MongoDB replication from primary to EU-West secondary via mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "mongodb-primary", "interfaces": ["mongodb-27017"] },
+                    "destination": { "node": "mongodb-secondary-euwest", "interfaces": ["mongodb-27017"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "mTLS-vault-pki",
+            "replication": true,
+            "replication-type": "async",
+            "gdpr-scope": true
+        },
+        {
+            "unique-id": "deployed-on-ocp-useast",
+            "description": "US-East components deployed on US-East OCP cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "ocp-useast",
+                    "nodes": ["portfolio-api-useast", "mongodb-primary"]
+                }
+            }
+        },
+        {
+            "unique-id": "deployed-on-ocp-uswest",
+            "description": "US-West components deployed on US-West OCP cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "ocp-uswest",
+                    "nodes": ["portfolio-api-uswest", "mongodb-secondary-uswest"]
+                }
+            }
+        },
+        {
+            "unique-id": "deployed-on-ocp-euwest",
+            "description": "EU-West components deployed on EU-West OCP cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "ocp-euwest",
+                    "nodes": ["portfolio-api-euwest", "mongodb-secondary-euwest"]
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "application-name": "portfolio-platform",
+        "team": "portfolio-engineering",
+        "cost-center": "CC-7830",
+        "compliance-scope": ["sox", "pci-dss"],
+        "data-classification": "confidential",
+        "sla-tier": "platinum",
+        "gdpr-regions": ["eu-west-1"],
+        "dr-strategy": "active-active-read",
+        "primary-region": "us-east-1",
+        "replica-set-name": "portfolio-rs0",
+        "requestor": "vault:identity/oidc/mwilliams",
+        "request-timestamp": "2026-03-05T10:00:00Z"
+    }
+}

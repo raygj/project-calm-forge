@@ -1,0 +1,51 @@
+{
+    "catalog-version": "1.0",
+    "description": "UHCCP Module Catalog — maps CALM node types to Terraform modules (microservices mesh)",
+    "modules": {
+        "service": {
+            "default": "registry.terraform.io/uhccp/ocp-service/v2.1.0",
+            "variants": {
+                "ocp-deployment": {
+                    "source": "registry.terraform.io/uhccp/ocp-deployment/v2.1.0",
+                    "description": "Standard OCP Deployment with Service, Ingress, HPA",
+                    "match": { "node-type": "service" }
+                }
+            }
+        },
+        "database": {
+            "default": "registry.terraform.io/uhccp/ocp-database/v1.3.0",
+            "variants": {
+                "postgresql-ocp": {
+                    "source": "registry.terraform.io/uhccp/crunchydata-postgres/v1.3.0",
+                    "description": "CrunchyData PostgreSQL Operator on OCP",
+                    "match": { "node-type": "database", "engine": "postgresql" }
+                }
+            }
+        },
+        "cache": {
+            "default": "registry.terraform.io/uhccp/ocp-cache/v1.0.0",
+            "variants": {
+                "redis-ocp": {
+                    "source": "registry.terraform.io/uhccp/redis-sentinel-ocp/v1.0.0",
+                    "description": "Redis Sentinel HA on OCP with TLS and persistence",
+                    "match": { "node-type": "cache", "engine": "redis" }
+                }
+            }
+        },
+        "vault-pki": {
+            "source": "registry.terraform.io/uhccp/vault-pki-mtls/v1.0.0",
+            "description": "Vault PKI for mTLS between services",
+            "match": { "authentication": "mTLS-vault-pki" }
+        },
+        "vault-dynamic-creds": {
+            "source": "registry.terraform.io/uhccp/vault-dynamic-db-creds/v1.0.0",
+            "description": "Vault dynamic database credentials",
+            "match": { "authentication": "vault-dynamic-credentials" }
+        },
+        "vault-kv-creds": {
+            "source": "registry.terraform.io/uhccp/vault-kv-creds/v1.0.0",
+            "description": "Vault KV secret store for static credentials (Redis, external APIs)",
+            "match": { "authentication": "vault-kv-credentials" }
+        }
+    }
+}

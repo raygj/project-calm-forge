@@ -1,0 +1,213 @@
+{
+  "@context": "https://calmforge.io/kg/v1/context.jsonld",
+  "@type": "Workload",
+  "@id": "workload:3tier-pci:v2",
+  "version": "2.0.0",
+  "version_of": "workload:3tier-pci:v1",
+  "name": "3-tier-pci",
+  "purpose": "PCI DSS v4-compliant three-tier web application \u2014 web, API, and database tiers with mTLS, dynamic credentials, and cardholder data isolation",
+  "owner": "platform-engineering",
+  "compliance_scope": [
+    "PCI-DSS-v4:req-1",
+    "PCI-DSS-v4:req-3",
+    "PCI-DSS-v4:req-4",
+    "PCI-DSS-v4:req-6",
+    "PCI-DSS-v4:req-7",
+    "PCI-DSS-v4:req-8"
+  ],
+  "_provenance": {
+    "authored_by": "calm-forge/adr-004-reference-pattern",
+    "authored_at": "2026-04-20T00:00:00Z"
+  },
+  "nodes": [
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:3tier-pci:web-tier",
+      "name": "web-tier",
+      "role": "load-balancer",
+      "declared_capabilities": [
+        "http_read",
+        "http_write",
+        "tls_termination"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:3tier-pci:api-tier",
+      "name": "api-tier",
+      "role": "api-gateway",
+      "declared_capabilities": [
+        "http_read",
+        "http_write",
+        "vault_dynamic_creds",
+        "mtls_client"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:3tier-pci:db-tier",
+      "name": "db-tier",
+      "role": "database",
+      "declared_capabilities": [
+        "postgres_read",
+        "postgres_write",
+        "encryption_at_rest"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "@type": "WorkloadRelationship",
+      "from": "workload:3tier-pci:web-tier",
+      "to": "workload:3tier-pci:api-tier",
+      "protocol": "mTLS",
+      "authentication": "vault-pki"
+    },
+    {
+      "@type": "WorkloadRelationship",
+      "from": "workload:3tier-pci:api-tier",
+      "to": "workload:3tier-pci:db-tier",
+      "protocol": "TLS",
+      "authentication": "vault-dynamic-credentials"
+    }
+  ],
+  "policies": [
+    {
+      "@type": "Policy",
+      "@id": "workload:3tier-pci:policy:pci-cluster-placement",
+      "predicate_type": "placement_constraint",
+      "subject": "workload:3tier-pci",
+      "required_labels": {
+        "compliance": "pci",
+        "environment": "prod"
+      },
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.label_constraint",
+      "provenance": "authored",
+      "rationale": "Cardholder data must be processed only on PCI-designated clusters"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:3tier-pci:policy:db-isolation",
+      "predicate_type": "isolation_requirement",
+      "subject": "workload:3tier-pci:db-tier",
+      "excluded_workload_tags": [
+        "non-pci",
+        "dev",
+        "staging"
+      ],
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.isolation_constraint",
+      "provenance": "authored",
+      "rationale": "PCI req-1: database tier must not share execution environment with non-PCI workloads"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:3tier-pci:policy:data-residency",
+      "predicate_type": "compliance_boundary",
+      "subject": "workload:3tier-pci",
+      "allowed_regions": [
+        "us-east-1",
+        "us-west-2",
+        "eu-west-1"
+      ],
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.region_constraint",
+      "provenance": "authored",
+      "rationale": "Cardholder data jurisdiction constraint \u2014 no placement in regions without PCI-DSS compliant infrastructure"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:3tier-pci:policy:dynamic-creds-required",
+      "predicate_type": "capability_requirement",
+      "subject": "workload:3tier-pci:api-tier",
+      "required_capability": "vault_dynamic_creds",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.capability.requirement_check",
+      "provenance": "authored",
+      "rationale": "PCI req-7/req-8: static credentials prohibited, dynamic credentials via Vault required"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:3tier-pci:policy:decommission-on-cert-expiry",
+      "predicate_type": "lifecycle_condition",
+      "subject": "workload:3tier-pci",
+      "condition": "vault_pki_cert_expiry_within_days < 7 AND renewal_failed = true",
+      "action": "alert",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.lifecycle.cert_expiry_check",
+      "provenance": "authored",
+      "rationale": "PCI req-4: expired TLS certificates must trigger immediate alert and remediation"
+    }
+  ],
+  "compliance_nodes": [
+    {
+      "@type": "Compliance",
+      "@id": "compliance:PCI-DSS-v4:req-1",
+      "framework": "PCI-DSS-v4",
+      "control_id": "req-1",
+      "requirement_text": "Install and maintain network security controls"
+    },
+    {
+      "@type": "Compliance",
+      "@id": "compliance:PCI-DSS-v4:req-7",
+      "framework": "PCI-DSS-v4",
+      "control_id": "req-7",
+      "requirement_text": "Restrict access to system components and cardholder data by business need to know"
+    },
+    {
+      "@type": "Compliance",
+      "@id": "compliance:PCI-DSS-v4:req-8",
+      "framework": "PCI-DSS-v4",
+      "control_id": "req-8",
+      "requirement_text": "Identify users and authenticate access to system components"
+    }
+  ],
+  "edges": [
+    {
+      "@type": "authored_in",
+      "from": "workload:3tier-pci",
+      "to": "compliance:PCI-DSS-v4:req-1"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:3tier-pci",
+      "to": "compliance:PCI-DSS-v4:req-7"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:3tier-pci",
+      "to": "compliance:PCI-DSS-v4:req-8"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:3tier-pci",
+      "to": "workload:3tier-pci:policy:pci-cluster-placement"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:3tier-pci",
+      "to": "workload:3tier-pci:policy:data-residency"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:3tier-pci:db-tier",
+      "to": "workload:3tier-pci:policy:db-isolation"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:3tier-pci:api-tier",
+      "to": "workload:3tier-pci:policy:dynamic-creds-required"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:3tier-pci:api-tier",
+      "to": "capability:vault_dynamic_creds"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:3tier-pci:db-tier",
+      "to": "capability:encryption_at_rest"
+    }
+  ]
+}

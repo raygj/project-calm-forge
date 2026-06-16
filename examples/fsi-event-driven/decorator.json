@@ -1,0 +1,20 @@
+{
+    "$schema": "https://uhccp.internal/decorators/ocp-deployment.decorator.schema.json",
+    "unique-id": "trade-pipeline-prod-placement-001",
+    "type": "deployment",
+    "target": ["trade-pipeline.architecture.json"],
+    "applies-to": ["ocp-cluster"],
+    "data": {
+        "deployment-start-time": "2026-03-05T09:05:00Z",
+        "deployment-status": "pending",
+        "kubernetes": {
+            "cluster": "prod-useast1-ocp-02",
+            "namespace": "trade-pipeline-prod",
+            "helm-chart": "uhccp-event-driven:1.2.0"
+        },
+        "cloud-provider": "aws",
+        "region": "us-east-1",
+        "environment": "production",
+        "placement-rationale-ref": "placement-rationale-trade-pipeline-prod-001.json"
+    }
+}

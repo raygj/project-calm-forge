@@ -1,0 +1,43 @@
+{
+  "jobs": [
+    {
+      "id": "job-001",
+      "name": "deploy-pci-multi-region-payments-us",
+      "status": "successful",
+      "finished": "2026-04-25T14:32:00Z",
+      "workload_name": "pci-multi-region-payments",
+      "target_cluster": "prod-east-ocp-01",
+      "namespace": "payments-prod",
+      "region": "us-east-1",
+      "observed_capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds", "encryption_at_rest", "mtls_client"
+      ]
+    },
+    {
+      "id": "job-002",
+      "name": "deploy-pci-multi-region-payments-eu",
+      "status": "successful",
+      "finished": "2026-04-25T14:35:00Z",
+      "workload_name": "pci-multi-region-payments",
+      "target_cluster": "prod-eu-west-ocp-01",
+      "namespace": "payments-prod",
+      "region": "eu-west-1",
+      "observed_capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds", "encryption_at_rest", "mtls_client"
+      ]
+    },
+    {
+      "id": "job-003",
+      "name": "deploy-fraud-detection-pipeline-us",
+      "status": "successful",
+      "finished": "2026-04-25T16:10:00Z",
+      "workload_name": "fraud-detection-pipeline",
+      "target_cluster": "prod-east-ocp-01",
+      "namespace": "fraud-prod",
+      "region": "us-east-1",
+      "observed_capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds", "confidential_compute"
+      ]
+    }
+  ]
+}

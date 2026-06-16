@@ -1,0 +1,57 @@
+{
+    "catalog-version": "1.0",
+    "description": "UHCCP Module Catalog — maps CALM node types to Terraform modules (multi-region MongoDB)",
+    "modules": {
+        "service": {
+            "default": "registry.terraform.io/uhccp/ocp-service/v2.1.0",
+            "variants": {
+                "ocp-deployment": {
+                    "source": "registry.terraform.io/uhccp/ocp-deployment/v2.1.0",
+                    "description": "Standard OCP Deployment with Service, Ingress, HPA",
+                    "match": { "node-type": "service" }
+                }
+            }
+        },
+        "database": {
+            "default": "registry.terraform.io/uhccp/ocp-database/v1.3.0",
+            "variants": {
+                "mongodb-ocp-primary": {
+                    "source": "registry.terraform.io/uhccp/mongodb-ocp-primary/v1.0.0",
+                    "description": "MongoDB Community Operator primary node on OCP with replication config",
+                    "match": { "node-type": "database", "engine": "mongodb", "replica-set-role": "primary" }
+                },
+                "mongodb-ocp-secondary": {
+                    "source": "registry.terraform.io/uhccp/mongodb-ocp-secondary/v1.0.0",
+                    "description": "MongoDB Community Operator secondary node on OCP with replication inputs",
+                    "match": { "node-type": "database", "engine": "mongodb", "replica-set-role": "secondary" }
+                }
+            }
+        },
+        "global-dns-lb": {
+            "source": "registry.terraform.io/uhccp/global-dns-lb/v1.0.0",
+            "description": "Global DNS-based load balancer (Route53 / Azure Traffic Manager / GCP Cloud DNS)",
+            "match": { "service-type": "global-dns-lb" }
+        },
+        "vault-pki": {
+            "source": "registry.terraform.io/uhccp/vault-pki-mtls/v1.0.0",
+            "description": "Vault PKI for mTLS — service mesh and cross-region replication certificates",
+            "match": { "authentication": "mTLS-vault-pki" }
+        },
+        "vault-dynamic-creds": {
+            "default": "registry.terraform.io/uhccp/vault-dynamic-db-creds/v1.0.0",
+            "description": "Vault dynamic database credentials",
+            "variants": {
+                "mongodb-readwrite": {
+                    "source": "registry.terraform.io/uhccp/vault-dynamic-mongodb-creds/v1.0.0",
+                    "description": "Vault dynamic MongoDB credentials — read-write role for primary",
+                    "match": { "authentication": "vault-dynamic-credentials", "engine": "mongodb", "access-scope": "read-write" }
+                },
+                "mongodb-readonly": {
+                    "source": "registry.terraform.io/uhccp/vault-dynamic-mongodb-creds/v1.0.0",
+                    "description": "Vault dynamic MongoDB credentials — read-only role for secondaries",
+                    "match": { "authentication": "vault-dynamic-credentials", "engine": "mongodb", "access-scope": "read-only" }
+                }
+            }
+        }
+    }
+}

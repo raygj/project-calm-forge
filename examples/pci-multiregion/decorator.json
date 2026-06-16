@@ -1,0 +1,40 @@
+{
+    "$schema": "https://finos.org/calm/decorators/multiregion-deployment.decorator.schema.json",
+    "unique-id": "pci-multiregion-payments-prod-placement-001",
+    "type": "deployment",
+    "target": ["pci-multiregion-payments.architecture.json"],
+    "applies-to": ["infra-us-east", "infra-eu-west"],
+    "data": {
+        "deployment-start-time": "2026-04-21T00:00:00Z",
+        "deployment-status": "pending",
+        "environment": "production",
+        "cloud-provider": "aws",
+        "dcm": {
+            "tier": 1,
+            "zones": ["us-east-1", "eu-west-1"]
+        },
+        "kubernetes": {
+            "clusters": [
+                {
+                    "region": "us-east-1",
+                    "cluster": "prod-us-east-ocp-01",
+                    "namespace": "pci-payments-us"
+                },
+                {
+                    "region": "eu-west-1",
+                    "cluster": "prod-eu-west-ocp-01",
+                    "namespace": "pci-payments-eu"
+                }
+            ],
+            "helm-chart": "payments-platform:4.1.0"
+        },
+        "compliance": {
+            "pci-dss-version": "v4.0",
+            "last-qsa-assessment": "2025-04-01",
+            "recertification-due": "2026-04-01",
+            "audit-artifacts-as-code": true,
+            "data-residency-enforced": true
+        },
+        "placement-rationale-ref": "placement-rationale-pci-multiregion-prod-001.json"
+    }
+}

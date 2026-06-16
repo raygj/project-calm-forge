@@ -1,0 +1,93 @@
+name: CALM Forge — Intent Validation
+
+on:
+  push:
+    paths:
+      - "**instantiation.json"
+      - "**decorator.json"
+      - "**/knowledge_graph/*.json"
+  pull_request:
+    paths:
+      - "**instantiation.json"
+      - "**decorator.json"
+      - "**/knowledge_graph/*.json"
+
+jobs:
+  validate-intent:
+    name: Validate architecture intent
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install calm-forge
+        run: pip install calm-forge
+
+      # Optional: install OPA for the full calm.violations rule set.
+      # Semantic graph invariants run without OPA.
+      - name: Install OPA (optional)
+        continue-on-error: true
+        run: |
+          curl -L -o /usr/local/bin/opa \
+            "https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static"
+          chmod +x /usr/local/bin/opa
+
+      - name: Validate intent
+        id: validate
+        run: |
+          calm-forge validate-intent \
+            --architecture "${{ inputs.architecture || 'instantiation.json' }}" \
+            --sarif \
+            --output calm-forge-results.sarif.json
+        continue-on-error: true
+
+      - name: Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: calm-forge-results.sarif.json
+          category: calm-forge-intent
+
+      - name: Fail on violations
+        if: steps.validate.outcome == 'failure'
+        run: |
+          echo "::error::CALM Forge intent validation failed — see Security tab for details"
+          exit 1
+
+  # -------------------------------------------------------------------------
+  # Validate all Workload KG patterns (reference patterns in the package)
+  # -------------------------------------------------------------------------
+  validate-reference-patterns:
+    name: Validate reference patterns
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        pattern:
+          - src/calm_forge/knowledge_graph/3-tier-pci.json
+          - src/calm_forge/knowledge_graph/fraud-detection-pipeline.json
+          - src/calm_forge/knowledge_graph/healthcare-hl7-pipeline.json
+          - src/calm_forge/knowledge_graph/supply-chain-analytics.json
+          - src/calm_forge/knowledge_graph/identity-verification-kyc.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install calm-forge
+        run: pip install -e .
+
+      - name: Validate ${{ matrix.pattern }}
+        run: |
+          calm-forge validate-intent \
+            --architecture "${{ matrix.pattern }}" \
+            --no-opa

@@ -1,0 +1,22 @@
+{
+  "name": "fraud-detection-pipeline",
+  "service": "container",
+  "tier": 1,
+  "zones": [
+    "us-east-1",
+    "us-west-2",
+    "eu-west-1",
+    "ap-southeast-1"
+  ],
+  "required_capabilities": [
+    "confidential_compute",
+    "external_state_management",
+    "high_throughput_io",
+    "http_write",
+    "memory_bandwidth_min_256gb",
+    "mtls_client",
+    "packet_offload",
+    "sub_millisecond_read"
+  ],
+  "placement_strategy": "capability_match"
+}

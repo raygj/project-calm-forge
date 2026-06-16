@@ -1,0 +1,20 @@
+{
+    "$schema": "https://uhccp.internal/decorators/ocp-deployment.decorator.schema.json",
+    "unique-id": "payments-portal-prod-placement-001",
+    "type": "deployment",
+    "target": ["payments-portal.architecture.json"],
+    "applies-to": ["ocp-cluster"],
+    "data": {
+        "deployment-start-time": "2026-02-22T14:32:00Z",
+        "deployment-status": "pending",
+        "kubernetes": {
+            "cluster": "prod-uksouth-ocp-01",
+            "namespace": "payments-portal-prod",
+            "helm-chart": "uhccp-3tier:1.4.0"
+        },
+        "cloud-provider": "azure",
+        "region": "uksouth",
+        "environment": "production",
+        "placement-rationale-ref": "placement-rationale-payments-portal-prod-001.json"
+    }
+}

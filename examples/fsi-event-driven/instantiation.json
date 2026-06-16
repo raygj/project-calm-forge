@@ -1,0 +1,210 @@
+{
+    "$schema": "https://uhccp.internal/patterns/fsi-event-driven.pattern.json",
+    "$id": "https://uhccp.internal/architectures/trade-pipeline.architecture.json",
+    "title": "Trade Pipeline — Production Architecture",
+    "nodes": [
+        {
+            "unique-id": "order-intake",
+            "node-type": "service",
+            "name": "Order Intake",
+            "description": "Receives trading orders via REST API, publishes to Kafka",
+            "container-image": "registry.internal/trading/order-intake:2.4.0",
+            "replicas": 3,
+            "cpu-request": "500m",
+            "memory-request": "512Mi"
+        },
+        {
+            "unique-id": "kafka-cluster",
+            "node-type": "kafka",
+            "name": "Kafka Cluster",
+            "description": "Event streaming backbone — 3 brokers, SASL/SCRAM + TLS",
+            "brokers": 3,
+            "version": "3.7.1",
+            "storage-class": "encrypted-ssd",
+            "storage-size-per-broker": "500Gi",
+            "topics": [
+                {
+                    "name": "orders",
+                    "partitions": 12,
+                    "replication-factor": 3,
+                    "retention-ms": 220752000000,
+                    "retention-note": "7-year regulatory retention (PCI-DSS + SEC 17a-4)"
+                },
+                {
+                    "name": "processed-trades",
+                    "partitions": 12,
+                    "replication-factor": 3,
+                    "retention-ms": 220752000000,
+                    "retention-note": "7-year regulatory retention"
+                },
+                {
+                    "name": "settlements",
+                    "partitions": 6,
+                    "replication-factor": 3,
+                    "retention-ms": 220752000000,
+                    "retention-note": "7-year regulatory retention"
+                }
+            ]
+        },
+        {
+            "unique-id": "trade-processor",
+            "node-type": "service",
+            "name": "Trade Processor",
+            "description": "Consumes orders, executes trade logic, produces processed-trades events",
+            "container-image": "registry.internal/trading/trade-processor:2.4.0",
+            "replicas": 5,
+            "cpu-request": "2000m",
+            "memory-request": "2Gi"
+        },
+        {
+            "unique-id": "settlement-engine",
+            "node-type": "service",
+            "name": "Settlement Engine",
+            "description": "Consumes processed trades, runs settlement workflow",
+            "container-image": "registry.internal/trading/settlement-engine:2.4.0",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "1Gi"
+        },
+        {
+            "unique-id": "audit-logger",
+            "node-type": "service",
+            "name": "Audit Logger",
+            "description": "Consumes all topics, writes to immutable audit store (SEC 17a-4)",
+            "container-image": "registry.internal/trading/audit-logger:2.4.0",
+            "replicas": 3,
+            "cpu-request": "500m",
+            "memory-request": "1Gi"
+        },
+        {
+            "unique-id": "postgres-db",
+            "node-type": "database",
+            "name": "Trade Database",
+            "description": "PostgreSQL — trade state, settlement records, encrypted at rest",
+            "engine": "postgresql",
+            "version": "15.4",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "200Gi"
+        },
+        {
+            "unique-id": "ocp-cluster",
+            "node-type": "system",
+            "name": "Target OCP Cluster",
+            "description": "Resolved by Placement Engine"
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "order-intake-produces-orders",
+            "description": "Order Intake publishes trading orders to Kafka orders topic",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "order-intake", "interfaces": ["kafka-producer"] },
+                    "destination": { "node": "kafka-cluster", "interfaces": ["orders-topic"] }
+                }
+            },
+            "protocol": "SASL_SSL",
+            "authentication": "vault-kafka-sasl-scram",
+            "topic": "orders"
+        },
+        {
+            "unique-id": "kafka-to-trade-processor",
+            "description": "Trade Processor consumes from Kafka orders topic",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "kafka-cluster", "interfaces": ["orders-topic"] },
+                    "destination": { "node": "trade-processor", "interfaces": ["kafka-consumer"] }
+                }
+            },
+            "protocol": "SASL_SSL",
+            "authentication": "vault-kafka-sasl-scram",
+            "topic": "orders",
+            "consumer-group": "trade-processor-cg"
+        },
+        {
+            "unique-id": "trade-processor-produces-processed",
+            "description": "Trade Processor publishes processed trades to Kafka",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "trade-processor", "interfaces": ["kafka-producer"] },
+                    "destination": { "node": "kafka-cluster", "interfaces": ["processed-trades-topic"] }
+                }
+            },
+            "protocol": "SASL_SSL",
+            "authentication": "vault-kafka-sasl-scram",
+            "topic": "processed-trades"
+        },
+        {
+            "unique-id": "kafka-to-settlement-engine",
+            "description": "Settlement Engine consumes from Kafka processed-trades topic",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "kafka-cluster", "interfaces": ["processed-trades-topic"] },
+                    "destination": { "node": "settlement-engine", "interfaces": ["kafka-consumer"] }
+                }
+            },
+            "protocol": "SASL_SSL",
+            "authentication": "vault-kafka-sasl-scram",
+            "topic": "processed-trades",
+            "consumer-group": "settlement-engine-cg"
+        },
+        {
+            "unique-id": "kafka-to-audit-logger",
+            "description": "Audit Logger consumes from all Kafka topics for immutable audit trail",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "kafka-cluster", "interfaces": ["orders-topic", "processed-trades-topic", "settlements-topic"] },
+                    "destination": { "node": "audit-logger", "interfaces": ["kafka-consumer"] }
+                }
+            },
+            "protocol": "SASL_SSL",
+            "authentication": "vault-kafka-sasl-scram",
+            "topics": ["orders", "processed-trades", "settlements"],
+            "consumer-group": "audit-logger-cg"
+        },
+        {
+            "unique-id": "trade-processor-to-db",
+            "description": "Trade Processor reads/writes trade state with Vault dynamic credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "trade-processor" },
+                    "destination": { "node": "postgres-db", "interfaces": ["postgres-5432"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials"
+        },
+        {
+            "unique-id": "settlement-engine-to-db",
+            "description": "Settlement Engine reads/writes settlement records with Vault dynamic credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "settlement-engine" },
+                    "destination": { "node": "postgres-db", "interfaces": ["postgres-5432"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials"
+        },
+        {
+            "unique-id": "deployed-on-ocp",
+            "description": "All components deployed on target OCP cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "ocp-cluster",
+                    "nodes": ["order-intake", "kafka-cluster", "trade-processor", "settlement-engine", "audit-logger", "postgres-db"]
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "application-name": "trade-pipeline",
+        "team": "trading-engineering",
+        "cost-center": "CC-7830",
+        "compliance-scope": "pci-dss",
+        "data-classification": "confidential",
+        "sla-tier": "platinum",
+        "requestor": "vault:identity/oidc/mchen",
+        "request-timestamp": "2026-03-05T09:00:00Z"
+    }
+}

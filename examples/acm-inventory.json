@@ -1,0 +1,56 @@
+{
+  "clusters": [
+    {
+      "name": "prod-east-ocp-01",
+      "uid": "cluster-abc123",
+      "region": "us-east-1",
+      "provider": "AWS",
+      "version": "4.14.12",
+      "status": "ready",
+      "substrate": "x86",
+      "labels": {
+        "environment": "prod",
+        "compliance": "pci",
+        "managed_by": "acm"
+      },
+      "capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds",
+        "encryption_at_rest", "mtls_client"
+      ]
+    },
+    {
+      "name": "prod-eu-west-ocp-01",
+      "uid": "cluster-def456",
+      "region": "eu-west-1",
+      "provider": "AWS",
+      "version": "4.14.12",
+      "status": "ready",
+      "substrate": "x86",
+      "labels": {
+        "environment": "prod",
+        "compliance": "pci",
+        "managed_by": "acm"
+      },
+      "capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds",
+        "encryption_at_rest", "mtls_client"
+      ]
+    },
+    {
+      "name": "dev-east-ocp-01",
+      "uid": "cluster-ghi789",
+      "region": "us-east-1",
+      "provider": "AWS",
+      "version": "4.14.10",
+      "status": "ready",
+      "substrate": "x86",
+      "labels": {
+        "environment": "dev",
+        "managed_by": "acm"
+      },
+      "capabilities": [
+        "http_read", "http_write", "vault_dynamic_creds"
+      ]
+    }
+  ]
+}

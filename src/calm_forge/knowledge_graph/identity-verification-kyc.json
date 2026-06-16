@@ -1,0 +1,192 @@
+{
+  "@context": "https://calmforge.io/kg/v1/context.jsonld",
+  "@type": "Workload",
+  "@id": "workload:identity-verification-kyc",
+  "version": "1.0.0",
+  "name": "identity-verification-kyc",
+  "purpose": "KYC/AML identity verification service. PII confined to confidential compute enclaves; credentials via Vault dynamic secrets.",
+  "owner": "identity-platform",
+  "compliance_scope": [
+    "PCI-DSS-v4:req-3",
+    "PCI-DSS-v4:req-7",
+    "SOC2:CC6.1",
+    "GDPR:art-25",
+    "GDPR:art-32"
+  ],
+  "declared_capabilities": [
+    "confidential_compute",
+    "encryption_at_rest",
+    "external_state_management",
+    "http_read",
+    "http_write",
+    "immutable_audit_log",
+    "mtls_client",
+    "pii_read",
+    "pii_write",
+    "vault_dynamic_creds"
+  ],
+  "nodes": [
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:identity-verification-kyc:kyc-api",
+      "name": "kyc-api",
+      "role": "api-gateway",
+      "declared_capabilities": [
+        "http_read",
+        "http_write",
+        "mtls_client",
+        "vault_dynamic_creds"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:identity-verification-kyc:pii-processor",
+      "name": "pii-processor",
+      "role": "data-processor",
+      "declared_capabilities": [
+        "confidential_compute",
+        "pii_read",
+        "pii_write",
+        "vault_dynamic_creds"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:identity-verification-kyc:sanctions-checker",
+      "name": "sanctions-checker",
+      "role": "lookup-worker",
+      "declared_capabilities": [
+        "http_read",
+        "external_state_management"
+      ]
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:identity-verification-kyc:decision-store",
+      "name": "decision-store",
+      "role": "state-manager",
+      "declared_capabilities": [
+        "encryption_at_rest",
+        "immutable_audit_log"
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "@type": "Policy",
+      "@id": "workload:identity-verification-kyc:policy:data-residency",
+      "predicate_type": "compliance_boundary",
+      "subject": "workload:identity-verification-kyc",
+      "allowed_regions": [
+        "us-east-1",
+        "eu-west-1"
+      ],
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.region_constraint",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:identity-verification-kyc:policy:capability-ceiling",
+      "predicate_type": "capability_ceiling",
+      "subject": "workload:identity-verification-kyc",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.manifest.capability_subset_check",
+      "rationale": "Runtime Agent capabilities must not exceed declared Workload capabilities (manifests_as invariant)",
+      "provenance": "authored"
+    }
+  ],
+  "edges": [
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:kyc-api",
+      "to": "capability:http_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:kyc-api",
+      "to": "capability:http_write"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:kyc-api",
+      "to": "capability:mtls_client"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:kyc-api",
+      "to": "capability:vault_dynamic_creds"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:pii-processor",
+      "to": "capability:confidential_compute"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:pii-processor",
+      "to": "capability:pii_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:pii-processor",
+      "to": "capability:pii_write"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:pii-processor",
+      "to": "capability:vault_dynamic_creds"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:sanctions-checker",
+      "to": "capability:http_read"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:sanctions-checker",
+      "to": "capability:external_state_management"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:decision-store",
+      "to": "capability:encryption_at_rest"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:identity-verification-kyc:decision-store",
+      "to": "capability:immutable_audit_log"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:identity-verification-kyc",
+      "to": "compliance:PCI-DSS-v4:req-3"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:identity-verification-kyc",
+      "to": "compliance:PCI-DSS-v4:req-7"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:identity-verification-kyc",
+      "to": "compliance:SOC2:CC6.1"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:identity-verification-kyc",
+      "to": "compliance:GDPR:art-25"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:identity-verification-kyc",
+      "to": "compliance:GDPR:art-32"
+    }
+  ],
+  "review_required": false,
+  "_provenance": {
+    "authored_by": "calm-forge/interview",
+    "authored_at": "2026-05-04T02:46:22.151404+00:00",
+    "provenance": "authored"
+  }
+}

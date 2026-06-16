@@ -1,0 +1,39 @@
+{
+  "workspaces": [
+    {
+      "name": "pci-payments-prod-us-east-1",
+      "terraform_version": "1.7.4",
+      "tags": ["pci", "prod", "payments"],
+      "vcs_repo": {"identifier": "org/payments-infra", "repository-http-url": ""},
+      "working_directory": "stacks/payments",
+      "created_at": "2025-09-01T12:00:00Z",
+      "updated_at": "2026-04-20T08:30:00Z",
+      "variables": [
+        {"key": "AWS_REGION", "category": "env", "sensitive": false, "value": "us-east-1"},
+        {"key": "VAULT_ADDR", "category": "env", "sensitive": false, "value": "https://vault.prod.internal:8200"}
+      ],
+      "resources": [
+        {"type": "aws_eks_cluster", "name": "payments-eks", "address": "aws_eks_cluster.payments-eks", "module": ""},
+        {"type": "aws_rds_cluster", "name": "payments-db", "address": "aws_rds_cluster.payments-db", "module": ""},
+        {"type": "aws_lb", "name": "payments-alb", "address": "aws_lb.payments-alb", "module": ""}
+      ]
+    },
+    {
+      "name": "pci-payments-prod-eu-west-1",
+      "terraform_version": "1.7.4",
+      "tags": ["pci", "prod", "payments"],
+      "vcs_repo": {"identifier": "org/payments-infra", "repository-http-url": ""},
+      "working_directory": "stacks/payments",
+      "created_at": "2025-09-01T12:00:00Z",
+      "updated_at": "2026-04-20T08:35:00Z",
+      "variables": [
+        {"key": "AWS_REGION", "category": "env", "sensitive": false, "value": "eu-west-1"},
+        {"key": "VAULT_ADDR", "category": "env", "sensitive": false, "value": "https://vault.prod.internal:8200"}
+      ],
+      "resources": [
+        {"type": "aws_eks_cluster", "name": "payments-eks", "address": "aws_eks_cluster.payments-eks", "module": ""},
+        {"type": "aws_rds_cluster", "name": "payments-db", "address": "aws_rds_cluster.payments-db", "module": ""}
+      ]
+    }
+  ]
+}

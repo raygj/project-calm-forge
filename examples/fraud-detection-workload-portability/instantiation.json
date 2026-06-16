@@ -1,0 +1,129 @@
+{
+    "$schema": "https://finos.org/calm/patterns/fraud-detection-pipeline.pattern.json",
+    "$id": "https://financial-crimes.internal/architectures/fraud-detection-pipeline.architecture.json",
+    "title": "Fraud Detection Pipeline — Production Architecture",
+    "nodes": [
+        {
+            "unique-id": "transaction-ingest",
+            "node-type": "service",
+            "name": "Transaction Ingest",
+            "description": "High-volume transaction stream consumer. Packet offload preferred — resolves to SmartNIC/xDPU environment if available.",
+            "container-image": "registry.internal/fraud/ingest:3.2.1",
+            "replicas": 4,
+            "cpu-request": "2000m",
+            "memory-request": "4Gi",
+            "required-capabilities": ["packet_offload", "high_throughput_io"],
+            "capability-profile": "network-offload"
+        },
+        {
+            "unique-id": "ml-scoring",
+            "node-type": "service",
+            "name": "ML Scoring",
+            "description": "Fraud model inference on cardholder data. Requires confidential compute enclave — ISA-agnostic (Intel TDX, AMD SEV-SNP, ARM CCA).",
+            "container-image": "registry.internal/fraud/scoring:1.8.0",
+            "replicas": 6,
+            "cpu-request": "4000m",
+            "memory-request": "16Gi",
+            "required-capabilities": ["confidential_compute", "memory_bandwidth_min_256gb"],
+            "capability-profile": "confidential-inference"
+        },
+        {
+            "unique-id": "external-state",
+            "node-type": "service",
+            "name": "External State",
+            "description": "Velocity check state layer. Sub-millisecond reads required. Portable — no proprietary managed service binding.",
+            "container-image": "registry.internal/fraud/state:2.0.0",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "32Gi",
+            "required-capabilities": ["external_state_management", "sub_millisecond_read"],
+            "capability-profile": "portable-state"
+        },
+        {
+            "unique-id": "decision-emitter",
+            "node-type": "service",
+            "name": "Decision Emitter",
+            "description": "Emits fraud decisions to downstream payment gateway over mTLS.",
+            "container-image": "registry.internal/fraud/decision:1.4.0",
+            "replicas": 2,
+            "cpu-request": "500m",
+            "memory-request": "1Gi",
+            "required-capabilities": ["http_write", "mtls_client"],
+            "capability-profile": "standard-service"
+        },
+        {
+            "unique-id": "infra-placement-target",
+            "node-type": "system",
+            "name": "Capability-Resolved Placement Target",
+            "description": "Execution environment resolved by DCM placement engine based on advertised capabilities. No ISA constraint declared."
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "ingest-to-scoring",
+            "description": "Transaction stream to ML scoring — 5ms latency budget",
+            "relationship-type": {
+                "connects": {
+                    "source": {"node": "transaction-ingest"},
+                    "destination": {"node": "ml-scoring"}
+                }
+            },
+            "protocol": "internal"
+        },
+        {
+            "unique-id": "scoring-to-state",
+            "description": "Velocity check reads — 1ms latency budget",
+            "relationship-type": {
+                "connects": {
+                    "source": {"node": "ml-scoring"},
+                    "destination": {"node": "external-state"}
+                }
+            },
+            "protocol": "internal"
+        },
+        {
+            "unique-id": "scoring-to-decision",
+            "description": "Fraud decision from scoring to emitter",
+            "relationship-type": {
+                "connects": {
+                    "source": {"node": "ml-scoring"},
+                    "destination": {"node": "decision-emitter"}
+                }
+            },
+            "protocol": "internal"
+        },
+        {
+            "unique-id": "decision-to-gateway",
+            "description": "Fraud decision delivered to payment gateway over mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": {"node": "decision-emitter", "interfaces": ["https-443"]},
+                    "destination": {"node": "payment-gateway", "interfaces": ["https-8443"]}
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "deployed-capability-target",
+            "description": "All nodes deployed to capability-resolved placement target",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "infra-placement-target",
+                    "nodes": ["transaction-ingest", "ml-scoring", "external-state", "decision-emitter"]
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "application-name": "fraud-detection-pipeline",
+        "team": "financial-crimes",
+        "cost-center": "CC-8800",
+        "compliance-scope": "pci-dss",
+        "compliance-version": "PCI-DSS-v4",
+        "data-classification": "cardholder-data",
+        "data-residency": ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"],
+        "sla-tier": "platinum",
+        "placement-strategy": "capability_match"
+    }
+}

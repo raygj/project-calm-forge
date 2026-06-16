@@ -1,0 +1,14 @@
+{
+  "@context": "https://calm.finos.org/patterns/v1",
+  "@type": "ArchitecturePattern",
+  "name": "event-driven",
+  "description": "Event-driven architecture with Kafka and vault-managed SASL credentials",
+  "tags": ["event-driven", "kafka", "fsi", "streaming"],
+  "required_node_types": ["service", "kafka", "database"],
+  "required_relationships": [
+    {"type": "connects", "authentication": "vault-kafka-sasl-scram"}
+  ],
+  "compliance_mappings": ["SOC2-CC7"],
+  "placement_rules": [],
+  "cost_model": {"tier": "high", "notes": "Multi-broker Kafka cluster required"}
+}

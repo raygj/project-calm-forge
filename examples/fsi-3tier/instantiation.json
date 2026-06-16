@@ -1,0 +1,89 @@
+{
+    "$schema": "https://uhccp.internal/patterns/fsi-3tier-app.pattern.json",
+    "$id": "https://uhccp.internal/architectures/payments-portal.architecture.json",
+    "title": "Payments Portal — Production Architecture",
+    "nodes": [
+        {
+            "unique-id": "web-frontend",
+            "node-type": "service",
+            "name": "Web Frontend",
+            "description": "Customer-facing payments portal",
+            "container-image": "registry.internal/payments/web:3.2.1",
+            "replicas": 3,
+            "cpu-request": "500m",
+            "memory-request": "512Mi"
+        },
+        {
+            "unique-id": "api-service",
+            "node-type": "service",
+            "name": "API Service",
+            "description": "Payment processing API — PCI Zone 1",
+            "container-image": "registry.internal/payments/api:3.2.1",
+            "replicas": 3,
+            "cpu-request": "1000m",
+            "memory-request": "1Gi"
+        },
+        {
+            "unique-id": "database",
+            "node-type": "database",
+            "name": "Primary Database",
+            "description": "PostgreSQL — encrypted at rest, PCI cardholder data",
+            "engine": "postgresql",
+            "version": "15.4",
+            "storage-class": "encrypted-ssd",
+            "storage-size": "100Gi"
+        },
+        {
+            "unique-id": "ocp-cluster",
+            "node-type": "system",
+            "name": "Target OCP Cluster",
+            "description": "Resolved by Placement Engine"
+        }
+    ],
+    "relationships": [
+        {
+            "unique-id": "web-to-api",
+            "description": "Frontend calls API over HTTPS with mTLS",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "web-frontend", "interfaces": ["https-8443"] },
+                    "destination": { "node": "api-service", "interfaces": ["https-8443"] }
+                }
+            },
+            "protocol": "HTTPS",
+            "authentication": "mTLS-vault-pki"
+        },
+        {
+            "unique-id": "api-to-db",
+            "description": "API connects to database with Vault dynamic credentials",
+            "relationship-type": {
+                "connects": {
+                    "source": { "node": "api-service" },
+                    "destination": { "node": "database", "interfaces": ["postgres-5432"] }
+                }
+            },
+            "protocol": "TLS",
+            "authentication": "vault-dynamic-credentials"
+        },
+        {
+            "unique-id": "deployed-on-ocp",
+            "description": "All components deployed on target OCP cluster",
+            "relationship-type": {
+                "deployed-in": {
+                    "container": "ocp-cluster",
+                    "nodes": ["web-frontend", "api-service", "database"]
+                }
+            }
+        }
+    ],
+    "metadata": {
+        "application-name": "payments-portal",
+        "team": "payments-engineering",
+        "cost-center": "CC-4521",
+        "compliance-scope": "pci-dss",
+        "data-classification": "confidential",
+        "sla-tier": "platinum",
+        "requestor": "vault:identity/oidc/jsmith",
+        "request-timestamp": "2026-02-22T14:30:00Z"
+    }
+}

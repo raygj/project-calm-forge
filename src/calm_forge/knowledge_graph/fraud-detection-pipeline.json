@@ -1,0 +1,283 @@
+{
+  "@context": "https://calmforge.io/kg/v1/context.jsonld",
+  "@type": "Workload",
+  "@id": "workload:fraud-detection-pipeline:v1",
+  "version": "1.0.0",
+  "name": "fraud-detection-pipeline",
+  "purpose": "Real-time payment fraud detection pipeline. Declares capability requirements without binding to ISA. Placement engine resolves to x86, ARM, or xDPU based on advertised capabilities of the target execution environment.",
+  "owner": "financial-crimes",
+  "compliance_scope": [
+    "PCI-DSS-v4:req-3",
+    "PCI-DSS-v4:req-10",
+    "SOC2:CC6.1",
+    "SOC2:CC7.2"
+  ],
+  "_provenance": {
+    "authored_by": "calm-forge/adr-004-reference-pattern",
+    "authored_at": "2026-04-20T00:00:00Z"
+  },
+  "nodes": [
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:fraud-detection-pipeline:ingest",
+      "name": "transaction-ingest",
+      "role": "stream-consumer",
+      "declared_capabilities": [
+        "packet_offload",
+        "high_throughput_io"
+      ],
+      "notes": "High-volume transaction stream \u2014 benefits from packet offload engine (SmartNIC/xDPU) but does not require it. Placement resolves to best available."
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:fraud-detection-pipeline:scoring",
+      "name": "ml-scoring",
+      "role": "inference-worker",
+      "declared_capabilities": [
+        "confidential_compute",
+        "memory_bandwidth_min_256gb"
+      ],
+      "notes": "Model inference on cardholder data. Requires confidential compute enclave \u2014 TEE on x86 (Intel TDX / AMD SEV), CCA on ARM, or equivalent. ISA is not the constraint; the capability is."
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:fraud-detection-pipeline:state",
+      "name": "external-state",
+      "role": "state-manager",
+      "declared_capabilities": [
+        "external_state_management",
+        "sub_millisecond_read"
+      ],
+      "notes": "Velocity checks require sub-millisecond state reads. Anti-data-gravity: state layer must be portable \u2014 no proprietary managed service binding."
+    },
+    {
+      "@type": "WorkloadComponent",
+      "@id": "workload:fraud-detection-pipeline:decision",
+      "name": "decision-emitter",
+      "role": "event-producer",
+      "declared_capabilities": [
+        "http_write",
+        "mtls_client"
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "@type": "WorkloadRelationship",
+      "from": "workload:fraud-detection-pipeline:ingest",
+      "to": "workload:fraud-detection-pipeline:scoring",
+      "protocol": "internal",
+      "latency_budget_ms": 5
+    },
+    {
+      "@type": "WorkloadRelationship",
+      "from": "workload:fraud-detection-pipeline:scoring",
+      "to": "workload:fraud-detection-pipeline:state",
+      "protocol": "internal",
+      "latency_budget_ms": 1
+    },
+    {
+      "@type": "WorkloadRelationship",
+      "from": "workload:fraud-detection-pipeline:scoring",
+      "to": "workload:fraud-detection-pipeline:decision",
+      "protocol": "internal"
+    },
+    {
+      "@type": "WorkloadRelationship",
+      "from": "workload:fraud-detection-pipeline:decision",
+      "to": "external:payment-gateway",
+      "protocol": "mTLS",
+      "authentication": "vault-pki"
+    }
+  ],
+  "policies": [
+    {
+      "@type": "Policy",
+      "@id": "workload:fraud-detection-pipeline:policy:confidential-compute",
+      "predicate_type": "capability_requirement",
+      "subject": "workload:fraud-detection-pipeline:scoring",
+      "required_capability": "confidential_compute",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.capability.requirement_check",
+      "rationale": "ML model and cardholder data must execute inside a confidential compute enclave. Capability, not ISA \u2014 resolves to Intel TDX, AMD SEV, ARM CCA, or equivalent.",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:fraud-detection-pipeline:policy:state-portability",
+      "predicate_type": "capability_requirement",
+      "subject": "workload:fraud-detection-pipeline:state",
+      "required_capability": "external_state_management",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.capability.requirement_check",
+      "rationale": "Anti-data-gravity: state layer must not be bound to a proprietary managed service. Must be portable across execution environments.",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:fraud-detection-pipeline:policy:latency-ceiling",
+      "predicate_type": "capability_requirement",
+      "subject": "workload:fraud-detection-pipeline:state",
+      "required_capability": "sub_millisecond_read",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.capability.requirement_check",
+      "rationale": "Velocity check SLA: state reads exceeding 1ms degrade fraud detection accuracy at volume",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:fraud-detection-pipeline:policy:data-residency",
+      "predicate_type": "compliance_boundary",
+      "subject": "workload:fraud-detection-pipeline",
+      "allowed_regions": [
+        "us-east-1",
+        "us-west-2",
+        "eu-west-1",
+        "ap-southeast-1"
+      ],
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.region_constraint",
+      "rationale": "Cardholder data must remain in jurisdictions with PCI-DSS compliant infrastructure",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:fraud-detection-pipeline:policy:scoring-isolation",
+      "predicate_type": "isolation_requirement",
+      "subject": "workload:fraud-detection-pipeline:scoring",
+      "excluded_workload_tags": [
+        "non-pci",
+        "public",
+        "dev"
+      ],
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.placement.isolation_constraint",
+      "rationale": "Confidential compute enclave must not be shared with non-PCI workloads \u2014 isolation is a property of the enclave boundary, not just the cluster",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:fraud-detection-pipeline:policy:drift-alert",
+      "predicate_type": "drift_threshold",
+      "subject": "workload:fraud-detection-pipeline",
+      "max_deviation_hours": 1,
+      "enforcement_mode": "audit",
+      "evaluated_by": "calm.drift.threshold_check",
+      "rationale": "Any placement deviation from declared intent must surface within 1 hour \u2014 fraud pipeline is high-value target for silent drift",
+      "provenance": "authored"
+    },
+    {
+      "@type": "Policy",
+      "@id": "workload:fraud-detection-pipeline:policy:capability-ceiling",
+      "predicate_type": "capability_ceiling",
+      "subject": "workload:fraud-detection-pipeline",
+      "enforcement_mode": "enforce",
+      "evaluated_by": "calm.manifest.capability_subset_check",
+      "rationale": "Runtime Agent capabilities must not exceed declared Workload capabilities (manifests_as invariant)",
+      "provenance": "authored"
+    }
+  ],
+  "capability_declarations": [
+    {
+      "@type": "Capability",
+      "@id": "capability:confidential_compute",
+      "capability_type": "compute",
+      "description": "Hardware-backed trusted execution environment \u2014 Intel TDX, AMD SEV-SNP, ARM CCA, or equivalent. ISA-agnostic.",
+      "resolution": "placement_engine"
+    },
+    {
+      "@type": "Capability",
+      "@id": "capability:packet_offload",
+      "capability_type": "network",
+      "description": "Hardware packet processing offload \u2014 SmartNIC, xDPU, or DPU. Preferred but not required for ingest tier.",
+      "resolution": "placement_engine"
+    },
+    {
+      "@type": "Capability",
+      "@id": "capability:external_state_management",
+      "capability_type": "storage",
+      "description": "Portable external state \u2014 Redis-compatible, Valkey, or equivalent. No proprietary managed service dependency.",
+      "resolution": "placement_engine"
+    },
+    {
+      "@type": "Capability",
+      "@id": "capability:sub_millisecond_read",
+      "capability_type": "performance",
+      "min_value": null,
+      "unit": "latency_p99_ms",
+      "max_value": 1,
+      "resolution": "placement_engine"
+    },
+    {
+      "@type": "Capability",
+      "@id": "capability:memory_bandwidth_min_256gb",
+      "capability_type": "compute",
+      "min_value": 256,
+      "unit": "GB/s",
+      "description": "Minimum memory bandwidth for inference workload at target throughput",
+      "resolution": "placement_engine"
+    }
+  ],
+  "edges": [
+    {
+      "@type": "authored_in",
+      "from": "workload:fraud-detection-pipeline",
+      "to": "compliance:PCI-DSS-v4:req-3"
+    },
+    {
+      "@type": "authored_in",
+      "from": "workload:fraud-detection-pipeline",
+      "to": "compliance:PCI-DSS-v4:req-10"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:fraud-detection-pipeline:scoring",
+      "to": "capability:confidential_compute"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:fraud-detection-pipeline:scoring",
+      "to": "capability:memory_bandwidth_min_256gb"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:fraud-detection-pipeline:ingest",
+      "to": "capability:packet_offload"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:fraud-detection-pipeline:state",
+      "to": "capability:external_state_management"
+    },
+    {
+      "@type": "requires_capability",
+      "from": "workload:fraud-detection-pipeline:state",
+      "to": "capability:sub_millisecond_read"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:fraud-detection-pipeline",
+      "to": "workload:fraud-detection-pipeline:policy:confidential-compute"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:fraud-detection-pipeline",
+      "to": "workload:fraud-detection-pipeline:policy:state-portability"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:fraud-detection-pipeline",
+      "to": "workload:fraud-detection-pipeline:policy:data-residency"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:fraud-detection-pipeline:scoring",
+      "to": "workload:fraud-detection-pipeline:policy:scoring-isolation"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:fraud-detection-pipeline",
+      "to": "workload:fraud-detection-pipeline:policy:drift-alert"
+    }
+  ]
+}

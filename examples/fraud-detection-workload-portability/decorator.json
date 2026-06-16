@@ -1,0 +1,27 @@
+{
+    "$schema": "https://finos.org/calm/decorators/capability-placement.decorator.schema.json",
+    "unique-id": "fraud-detection-pipeline-prod-capability-001",
+    "type": "deployment",
+    "target": ["fraud-detection-pipeline.architecture.json"],
+    "applies-to": ["infra-placement-target"],
+    "data": {
+        "deployment-start-time": "2026-05-01T00:00:00Z",
+        "deployment-status": "pending",
+        "environment": "production",
+        "dcm": {
+            "tier": 1,
+            "placement_strategy": "capability_match",
+            "zones": ["us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"]
+        },
+        "kubernetes": {
+            "cluster": "capability-resolved",
+            "namespace": "fraud-detection"
+        },
+        "compliance": {
+            "pci-dss-version": "v4.0",
+            "data-residency-enforced": true,
+            "confidential-compute-required": true,
+            "audit-artifacts-as-code": true
+        }
+    }
+}
