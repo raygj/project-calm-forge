@@ -19,7 +19,7 @@ api = [
     "uvicorn[standard]>=0.29",
     "PyJWT>=2.8",
     "cryptography>=42.0",
-    "mcp>=1.0",
+    "mcp>=1.0,<2",
 ]
 graph = [
     "kuzu>=0.6",
@@ -35,7 +35,7 @@ dev = [
     "PyJWT>=2.8",
     "cryptography>=42.0",
     "httpx>=0.27",
-    "mcp>=1.0",
+    "mcp>=1.0,<2",
 ]
 
 [tool.setuptools.packages.find]
