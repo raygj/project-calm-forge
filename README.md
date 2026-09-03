@@ -63,7 +63,7 @@ Intent (CALM spec)
     ▼
 [interview]  →  Workload KG node
 [validate-intent]  →  OPAEngine + ManifoldEngine (curvature score)
-[generate]  →  HCL, Vault, Ansible, DCM, Backstage
+[generate]  →  HCL, Sentinel/tfpolicy, Vault, Ansible, DCM, Backstage
 [deploy]  →  GitOps target  →  DeploymentRequest KG node
 [observe]  →  deployment completion  →  DeploymentStatus KG node
 [drift-check]  →  curvature-history.jsonl
@@ -95,6 +95,32 @@ architecture-plane object stays unambiguous.
 
 Drift is evaluated per plane, and cross-plane drift catches the cases where two
 planes disagree about the same subject.
+
+## Policy Generation
+
+Policy is a compilation target, not a hand-written artifact. The same CALM intent
+projects into two policy frameworks, selected with `--policy-framework`:
+
+```bash
+calm-forge generate --calm instantiation.json --decorator decorator.json \
+  --catalog catalog.json --output-dir ./output --full \
+  --policy-framework sentinel     # default
+  #                  tfpolicy     # Terraform Policy [BETA upstream]
+  #                  all          # emit both
+```
+
+`tfpolicy` writes `policies.policy.hcl` alongside `policies.policytest.hcl` — one
+generated test per emitted policy, runnable with `tfpolicy test`. Both carry a
+`[BETA]` marker, because Terraform Policy is beta upstream at HashiCorp and its
+syntax may change before GA.
+
+**Parity is by construction, not by review.** A single function, `predicates_for(metadata)`,
+names which predicates a given CALM intent enforces. Both emitters and the parity
+test derive from it, so Sentinel and tfpolicy enforce the same predicate set for the
+same intent — or `tests/test_policy_parity.py` fails across every example carrying a
+CALM instantiation. Neither projection is authoritative; both answer to the intent.
+
+OPA Rego is emitted separately, through `validate-intent` rather than `generate`.
 
 ## Attested Policy Passports
 
