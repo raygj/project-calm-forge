@@ -120,6 +120,15 @@ test derive from it, so Sentinel and tfpolicy enforce the same predicate set for
 same intent — or `tests/test_policy_parity.py` fails across every example carrying a
 CALM instantiation. Neither projection is authoritative; both answer to the intent.
 
+Policy rules name concrete resource types, so both emitters key off the decorator's
+`cloud-provider` and emit `aws_*` or `azurerm_*` targets accordingly — a rule filtering
+the wrong provider's resources does not error, it silently matches nothing. Two AWS
+checks are deliberately unratified and emit a visible `TODO(aws-sme)` marker instead of
+a guessed attribute path: S3 server-side encryption (relocated to its own resource in
+AWS provider v4) and security-group ingress from `0.0.0.0/0` (needs iteration over the
+ingress rule list). A guessed path would produce a policy that passes review and matches
+nothing in the plan, which is worse than an obvious gap.
+
 OPA Rego is emitted separately, through `validate-intent` rather than `generate`.
 
 ## Attested Policy Passports
