@@ -36,7 +36,9 @@
         "http_write",
         "mtls_client",
         "vault_dynamic_creds"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -48,7 +50,9 @@
         "pii_read",
         "pii_write",
         "vault_dynamic_creds"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -58,7 +62,9 @@
       "declared_capabilities": [
         "http_read",
         "external_state_management"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -68,7 +74,9 @@
       "declared_capabilities": [
         "encryption_at_rest",
         "immutable_audit_log"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
   "policies": [
@@ -83,7 +91,9 @@
       ],
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.placement.region_constraint",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -93,7 +103,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.manifest.capability_subset_check",
       "rationale": "Runtime Agent capabilities must not exceed declared Workload capabilities (manifests_as invariant)",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
   "edges": [
@@ -188,5 +200,7 @@
     "authored_by": "calm-forge/interview",
     "authored_at": "2026-05-04T02:46:22.151404+00:00",
     "provenance": "authored"
-  }
+  },
+  "node_class": "authored",
+  "plane": "architecture"
 }

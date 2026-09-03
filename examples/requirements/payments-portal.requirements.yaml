@@ -1,0 +1,60 @@
+requirements_schema: "0.1"
+
+actors:
+  - id: actor:ecommerce-customer
+    node_class: authored
+    plane: requirements
+    name: E-commerce customer
+    kind: human
+    description: External payer completing checkout. No anchor — not an internal identity.
+
+  - id: actor:settlement-agent
+    node_class: authored
+    plane: requirements
+    name: Settlement reconciliation agent
+    kind: agent
+    anchor_ref: kg://anchor/APP-10432
+    description: Autonomous reconciliation. Associated with the anchor; never accountable.
+
+requirements:
+  - id: req:payments/record-transaction
+    node_class: authored
+    plane: requirements
+    actor: actor:ecommerce-customer
+    story: >-
+      As an e-commerce customer, I want my payment recorded immediately so my order
+      confirms in one step.
+    priority: must
+    status: ratified
+    acceptance:
+      - given: a valid payment method on file
+        when: the customer completes checkout
+        then: a payment transaction is durably recorded within 2 seconds
+      - given: the payment processor is unreachable
+        when: the customer completes checkout
+        then: the order is held and no partial transaction is recorded
+    realizes:
+      - kg://odcs/contract/payments-settled-v1
+
+  - id: req:payments/reconcile-nightly
+    node_class: authored
+    plane: requirements
+    actor: actor:settlement-agent
+    story: >-
+      As the settlement agent, I want each night's transactions reconciled so finance
+      reports from a settled position.
+    priority: should
+    status: draft
+
+target_states:
+  - id: ts:payments/zero-trust-compute
+    node_class: authored
+    plane: requirements
+    description: Non-functional intent for the payments tier.
+    assertions:
+      compute_type: isolated_ephemeral
+      scaling: network_traffic_bound
+      data_classification: confidential
+      residency: eu-only
+    realizes:
+      - kg://odcs/contract/payments-settled-v1

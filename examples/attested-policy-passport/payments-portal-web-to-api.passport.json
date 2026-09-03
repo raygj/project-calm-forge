@@ -1,0 +1,63 @@
+{
+  "passport_version": "0.1",
+  "passport_id": "d954d33f-2729-4fc5-81ce-16747133b16d",
+  "spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/web-frontend",
+  "intent_metadata": {
+    "business_justification": "Frontend calls API over HTTPS with mTLS",
+    "environment": "production",
+    "requested_by": "spiffe://prod.fsi/ns/payments-portal/sa/web-frontend",
+    "ticket_id": "SEC-8841",
+    "compliance_scope": [
+      "PCI-DSS-v4:req-1.3.1",
+      "PCI-DSS-v4:req-4.2.1"
+    ],
+    "data_classification": "confidential"
+  },
+  "network_binding": {
+    "source_workload": "web-frontend",
+    "source_workload_urn": "wl:payments-portal/web-frontend",
+    "destination_workload": "api-service",
+    "destination_workload_urn": "wl:payments-portal/api-service",
+    "transport": "tcp",
+    "direction": "egress",
+    "source_spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/web-frontend",
+    "destination_spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/api-service",
+    "app_protocol": [
+      "HTTPS",
+      "mTLS"
+    ],
+    "authentication": "mTLS-vault-pki",
+    "port": 8443,
+    "port_source": "declared-interface"
+  },
+  "claim": {
+    "claim_type": "grant",
+    "tense": "should-be",
+    "authority_class": "governed-expansion"
+  },
+  "graph_ref": {
+    "edge_id": "kg://edges/v1/6cddff5734fc8c2b0a9ab2c318873f62b409e83109e7b6b54a0d1b91ea20b2aa",
+    "source": "declared",
+    "confidence": 1.0,
+    "authored_by": "calm-forge/fsi-3tier-instantiation",
+    "authored_at": "2026-02-22T14:30:00Z"
+  },
+  "lifecycle": {
+    "issued_at": 1771770600,
+    "expires_at": 1803306600
+  },
+  "ownership": {
+    "owner": "payments-engineering",
+    "team": "payments-engineering",
+    "cost_center": "CC-4521",
+    "application_name": "payments-portal",
+    "sla_tier": "platinum"
+  },
+  "proof": {
+    "issuer": "spiffe://prod.fsi/ns/platform/sa/calm-forge",
+    "algorithm": "ed25519",
+    "canonicalization": "jcs",
+    "public_key_b64": "ePXISl3tktXQFmJUoXyZZMDrdKUkLnagqimTBqYAsdk=",
+    "signature_b64": "M6C9b+QXLcNxkuL968ERDb1pzaai7iaqeXlwwEIaMT5EKDNKwZ5HijkIbrw0lX7/Ry9TuC2ky8BgRaRXn9kOBw=="
+  }
+}

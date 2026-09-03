@@ -1,0 +1,64 @@
+{
+  "passport_version": "0.1",
+  "passport_id": "9f2b7c41-5ad8-4e6a-9f03-2c8e1d47b5a9",
+  "spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/api-service",
+  "intent_metadata": {
+    "business_justification": "API connects to database with Vault dynamic credentials",
+    "environment": "production",
+    "requested_by": "spiffe://prod.fsi/ns/payments-portal/sa/api-service",
+    "ticket_id": "SEC-8842",
+    "compliance_scope": [
+      "PCI-DSS-v4:req-1.3.1",
+      "PCI-DSS-v4:req-4.2.1",
+      "PCI-DSS-v4:req-8.3.1"
+    ],
+    "data_classification": "confidential"
+  },
+  "network_binding": {
+    "source_workload": "api-service",
+    "source_workload_urn": "wl:payments-portal/api-service",
+    "destination_workload": "database",
+    "destination_workload_urn": "wl:payments-portal/database",
+    "transport": "tcp",
+    "direction": "egress",
+    "source_spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/api-service",
+    "destination_spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/database",
+    "app_protocol": [
+      "TLS",
+      "postgres"
+    ],
+    "authentication": "vault-dynamic-credentials",
+    "port": 5432,
+    "port_source": "declared-interface"
+  },
+  "claim": {
+    "claim_type": "grant",
+    "tense": "should-be",
+    "authority_class": "governed-expansion"
+  },
+  "graph_ref": {
+    "edge_id": "kg://edges/v1/123b13f1a05cb9b8b13139434e218021ab98d3ee4641f065aa59e42fac3696a8",
+    "source": "declared",
+    "confidence": 1.0,
+    "authored_by": "calm-forge/fsi-3tier-instantiation",
+    "authored_at": "2026-02-22T14:30:00Z"
+  },
+  "lifecycle": {
+    "issued_at": 1771770600,
+    "expires_at": 1803306600
+  },
+  "ownership": {
+    "team": "payments-engineering",
+    "cost_center": "CC-4521",
+    "application_name": "payments-portal",
+    "sla_tier": "platinum",
+    "owner": "payments-engineering"
+  },
+  "proof": {
+    "issuer": "spiffe://prod.fsi/ns/platform/sa/calm-forge",
+    "algorithm": "ed25519",
+    "canonicalization": "jcs",
+    "public_key_b64": "5JVNqxwlPnalKYFAOfXhZOG/F+cHxye7w/2hTUCuHZk=",
+    "signature_b64": "NaPYkQtoN5g1mk1zwQBdqa1Dhs/uycgfyjRvHTxST8wHrHJ36GEkOpPbFhTtT8HfT+ilM32P6oZHVJBUAEgiCw=="
+  }
+}

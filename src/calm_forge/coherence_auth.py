@@ -1,14 +1,14 @@
 """SPIFFE/mTLS authentication for the coherence endpoint.
 
 Per ADR-P3-001 §5 and ADR-0024 Federation Authority:
-  - Prod federation requires SPIFFE/mTLS — SPIFFE-issued peer certificates
+  - Prod federation requires SPIFFE/mTLS — Starfly-issued peer certificates
     on both sides. Cleartext federation is rejected at the TLS layer.
   - Dev mode runs without mTLS, explicitly not supported in production.
 
 Configuration (environment variables):
   CALM_FORGE_COHERENCE_AUTH   "none" (dev, default) | "spiffe" (prod)
   CALM_FORGE_COHERENCE_PEERS  Comma-separated trust domains allowed to call
-                              (e.g. "prod.fsi,peer.prod"). When unset in
+                              (e.g. "prod.fsi,starfly.prod"). When unset in
                               spiffe mode, peers are derived from TrustDomain
                               nodes in the KG (union of peer_trust_domains).
 
@@ -111,7 +111,7 @@ async def require_coherence_auth(request: Request) -> None:
                 "Coherence endpoint requires SPIFFE/mTLS "
                 "(CALM_FORGE_COHERENCE_AUTH=spiffe) but no verified client "
                 "certificate was presented. Serve with --ssl-ca-certs and "
-                "connect with a SPIFFE-issued SVID."
+                "connect with a Starfly-issued SVID."
             ),
         )
 

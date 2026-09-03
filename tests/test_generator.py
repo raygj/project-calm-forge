@@ -1,17 +1,11 @@
 """Roundtrip tests — example JSON → HCL → compare to expected output."""
 
-import re
 from pathlib import Path
 
 from calm_forge.generator import generate_stack, validate_architecture
 
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples" / "fsi-3tier"
 EXPECTED_DIR = EXAMPLES_DIR / "expected-output"
-
-
-def _strip_timestamp(text):
-    """Remove the GENERATED timestamp line so comparisons are stable."""
-    return re.sub(r"^# GENERATED:    .*$", "# GENERATED:    (timestamp varies)", text, flags=re.MULTILINE)
 
 
 def test_roundtrip_components(tmp_path):
@@ -23,7 +17,7 @@ def test_roundtrip_components(tmp_path):
         str(tmp_path),
     )
 
-    actual = _strip_timestamp((tmp_path / "components.tfstack.hcl").read_text())
+    actual = (tmp_path / "components.tfstack.hcl").read_text()
     expected = (EXPECTED_DIR / "components.tfstack.hcl").read_text()
     assert actual == expected
 

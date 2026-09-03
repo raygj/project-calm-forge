@@ -26,7 +26,9 @@
         "packet_offload",
         "high_throughput_io"
       ],
-      "notes": "High-volume transaction stream \u2014 benefits from packet offload engine (SmartNIC/xDPU) but does not require it. Placement resolves to best available."
+      "notes": "High-volume transaction stream \u2014 benefits from packet offload engine (SmartNIC/xDPU) but does not require it. Placement resolves to best available.",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -37,7 +39,9 @@
         "confidential_compute",
         "memory_bandwidth_min_256gb"
       ],
-      "notes": "Model inference on cardholder data. Requires confidential compute enclave \u2014 TEE on x86 (Intel TDX / AMD SEV), CCA on ARM, or equivalent. ISA is not the constraint; the capability is."
+      "notes": "Model inference on cardholder data. Requires confidential compute enclave \u2014 TEE on x86 (Intel TDX / AMD SEV), CCA on ARM, or equivalent. ISA is not the constraint; the capability is.",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -48,7 +52,9 @@
         "external_state_management",
         "sub_millisecond_read"
       ],
-      "notes": "Velocity checks require sub-millisecond state reads. Anti-data-gravity: state layer must be portable \u2014 no proprietary managed service binding."
+      "notes": "Velocity checks require sub-millisecond state reads. Anti-data-gravity: state layer must be portable \u2014 no proprietary managed service binding.",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -58,7 +64,9 @@
       "declared_capabilities": [
         "http_write",
         "mtls_client"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
   "relationships": [
@@ -100,7 +108,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.capability.requirement_check",
       "rationale": "ML model and cardholder data must execute inside a confidential compute enclave. Capability, not ISA \u2014 resolves to Intel TDX, AMD SEV, ARM CCA, or equivalent.",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -111,7 +121,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.capability.requirement_check",
       "rationale": "Anti-data-gravity: state layer must not be bound to a proprietary managed service. Must be portable across execution environments.",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -122,7 +134,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.capability.requirement_check",
       "rationale": "Velocity check SLA: state reads exceeding 1ms degrade fraud detection accuracy at volume",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -138,7 +152,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.placement.region_constraint",
       "rationale": "Cardholder data must remain in jurisdictions with PCI-DSS compliant infrastructure",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -153,7 +169,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.placement.isolation_constraint",
       "rationale": "Confidential compute enclave must not be shared with non-PCI workloads \u2014 isolation is a property of the enclave boundary, not just the cluster",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -164,7 +182,9 @@
       "enforcement_mode": "audit",
       "evaluated_by": "calm.drift.threshold_check",
       "rationale": "Any placement deviation from declared intent must surface within 1 hour \u2014 fraud pipeline is high-value target for silent drift",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -174,7 +194,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.manifest.capability_subset_check",
       "rationale": "Runtime Agent capabilities must not exceed declared Workload capabilities (manifests_as invariant)",
-      "provenance": "authored"
+      "provenance": "authored",
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
   "capability_declarations": [
@@ -279,5 +301,7 @@
       "from": "workload:fraud-detection-pipeline",
       "to": "workload:fraud-detection-pipeline:policy:drift-alert"
     }
-  ]
+  ],
+  "node_class": "authored",
+  "plane": "architecture"
 }

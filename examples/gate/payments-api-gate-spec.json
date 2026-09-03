@@ -1,0 +1,64 @@
+{
+  "artifact": {
+    "uri": "registry.example/payments/api",
+    "digest_sha256": "sha256:e9f76525dec53b49ff907661cbba2c081605f40088c2e3d436e6fed7dbba253c"
+  },
+  "suite": {
+    "uri": "kg://supply_chain/archetype-suite/v1",
+    "content": {
+      "suite_version": "v1",
+      "archetypes": [
+        {
+          "name": "go-strict-tls",
+          "purpose": "Lightweight Go/.NET service with strict TLS bindings"
+        },
+        {
+          "name": "java-spring-heavy",
+          "purpose": "Heavyweight Java Spring Boot with complex DB drivers"
+        }
+      ]
+    }
+  },
+  "checks": [
+    {
+      "name": "api-mtls",
+      "kind": "mtls_handshake",
+      "archetype": "go-strict-tls",
+      "spec": {"min_tls_version": "1.3", "require_mutual": true,
+               "allowed_ciphers": ["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"]},
+      "evidence": {"negotiated_tls_version": "1.3", "mutual": true,
+                   "cipher": "TLS_AES_256_GCM_SHA384"}
+    },
+    {
+      "name": "api-synthetic",
+      "kind": "synthetic_transaction",
+      "archetype": "go-strict-tls",
+      "spec": {"expect_status": 200, "max_latency_ms": 250},
+      "evidence": {"status": 200, "latency_ms": 118}
+    },
+    {
+      "name": "api-db-driver",
+      "kind": "db_driver_compat",
+      "archetype": "java-spring-heavy",
+      "spec": {"driver": "postgresql", "min_version": "42.6"},
+      "evidence": {"driver": "postgresql", "version": "42.7.3"}
+    },
+    {
+      "name": "api-resource-profile",
+      "kind": "resource_profile",
+      "archetype": "java-spring-heavy",
+      "spec": {"max_memory_mb": 1024, "max_cpu_millicores": 2000},
+      "evidence": {"memory_mb": 768, "cpu_millicores": 1500}
+    }
+  ],
+  "input_attestations": [
+    {
+      "uri": "kg://supply_chain/provenance/payments-api",
+      "digest": {"sha256": "f91e041ce609589f39bc9dd16013e9dfef69121ab6fbfc7e2637a9ea3e8f9de8"}
+    },
+    {
+      "uri": "kg://supply_chain/sbom/payments-api",
+      "digest": {"sha256": "bbf2512d43ca1dd841e0653508b7d6ea1a3ca5b7291201f017cd81112a981066"}
+    }
+  ]
+}

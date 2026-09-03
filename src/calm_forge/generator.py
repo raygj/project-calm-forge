@@ -6,8 +6,16 @@ from pathlib import Path
 from .ansible_writer import write_eda_rulebook, write_inventory
 from .dcm_writer import write_dcm_application
 from .hcl_writer import write_components, write_deployments, write_variables
+from .provenance import (
+    PROVENANCE_ENVELOPE_FILENAME,
+    PROVENANCE_FILENAME,
+    dsse_envelope,
+    provenance_for_generated_files,
+    render,
+)
 from .resolver import resolve_module, resolve_relationship_components
 from .sentinel_writer import write_sentinel_policies
+from .tfpolicy_writer import write_tfpolicy_policies, write_tfpolicy_tests
 from .vault_writer import write_pki_config, write_vault_policies
 
 
@@ -62,12 +70,24 @@ def validate_inputs(architecture, decorator, catalog,
 
 
 def generate_stack(calm_path, decorator_path, catalog_path, output_dir,
-                   full=False, include_imports=False):
+                   full=False, include_imports=False, policy_framework="sentinel",
+                   signing_key=None):
     """Main entry point: CALM architecture + decorator + catalog → output files.
 
     When full=False (default), generates 3 Terraform Stacks HCL files.
     When full=True, also generates Vault, Sentinel, and Ansible artifacts.
+
+    ``policy_framework`` selects which policy language the full set emits:
+    ``sentinel`` (default, back-compat), ``tfpolicy`` (native HCL policy, beta), or
+    ``all`` (both). Each is an independent projection of the same CALM intent — no
+    framework is translated from another. OPA is emitted via the validate-intent path,
+    not here, so it is not a generate-time framework choice.
     When include_imports=True, generates import blocks for brownfield adoption.
+
+    Every run emits SLSA v1.0 build provenance (ADR-007). When ``signing_key`` is
+    supplied the statement is additionally written as a signed DSSE envelope; without
+    one the statement is emitted unsigned — a truthful build record, but not
+    tamper-evident, so downstream must not treat it as an attestation.
 
     Returns dict mapping filename → generated content.
     """
@@ -145,9 +165,17 @@ def generate_stack(calm_path, decorator_path, catalog_path, output_dir,
         files["vault/pki-config.hcl"] = write_pki_config(
             component_map, rel_components, metadata, decorators,
         )
-        files["sentinel/policies.sentinel"] = write_sentinel_policies(
-            metadata, component_map, decorators,
-        )
+        if policy_framework in ("sentinel", "all"):
+            files["sentinel/policies.sentinel"] = write_sentinel_policies(
+                metadata, component_map, decorators,
+            )
+        if policy_framework in ("tfpolicy", "all"):
+            files["tfpolicy/policies.policy.hcl"] = write_tfpolicy_policies(
+                metadata, component_map, decorators,
+            )
+            files["tfpolicy/policies.policytest.hcl"] = write_tfpolicy_tests(
+                metadata, component_map, decorators,
+            )
         files["ansible/inventory.yml"] = write_inventory(
             component_map, decorators, metadata,
         )
@@ -161,10 +189,28 @@ def generate_stack(calm_path, decorator_path, catalog_path, output_dir,
         if import_lines:
             files["imports.tf"] = import_lines
 
+    # SLSA v1.0 build provenance over the whole emitted set (ADR-007). Written last so
+    # every artifact is a subject, and excluded from `files` so it never becomes a
+    # subject of itself.
+    provenance = provenance_for_generated_files(
+        files,
+        {"calm": calm_path, "decorator": decorator_path, "catalog": catalog_path},
+        external_parameters={
+            "full": full,
+            "include_imports": include_imports,
+            "policy_framework": policy_framework,
+        },
+    )
+
     for name, content in files.items():
         filepath = out / name
         filepath.parent.mkdir(parents=True, exist_ok=True)
         filepath.write_text(content)
+
+    (out / PROVENANCE_FILENAME).write_text(render(provenance))
+    if signing_key is not None:
+        envelope = dsse_envelope(provenance, signing_key)
+        (out / PROVENANCE_ENVELOPE_FILENAME).write_text(json.dumps(envelope, indent=2) + "\n")
 
     return files
 

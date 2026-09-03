@@ -25,7 +25,9 @@ def load_patterns(kg_dir: Path | None = None) -> list[dict[str, Any]]:
             data = json.loads(path.read_text())
         except (json.JSONDecodeError, OSError):
             continue
-        if data.get("@type") == "Workload":
+        # A non-object JSON file in this directory is not a pattern — migration
+        # records and provenance live here too. Skip rather than crash on .get().
+        if isinstance(data, dict) and data.get("@type") == "Workload":
             patterns.append(data)
 
     return patterns
@@ -123,6 +125,17 @@ _REQUIRED_POLICY_FIELDS = {
 }
 
 
+def validate_planes(pattern: dict[str, Any]) -> list[str]:
+    """Class/plane gaps for a Workload document (MP-08, ADR-005 §1).
+
+    Thin re-export so callers of this module do not need to know that the plane rules
+    live in :mod:`calm_forge.kg_plane`.
+    """
+    from .kg_plane import validate_document
+
+    return validate_document(pattern)
+
+
 def assert_round_trip_ready(pattern: dict[str, Any]) -> list[str]:
     """Validate a Workload pattern has the minimum fields required for round-trip reconstruction.
 
@@ -159,6 +172,9 @@ def assert_round_trip_ready(pattern: dict[str, Any]) -> list[str]:
             gaps.append(f"Policy {pid}: capability_requirement missing required_capability")
         if ptype == "drift_threshold" and policy.get("max_deviation_hours") is None:
             gaps.append(f"Policy {pid}: drift_threshold missing max_deviation_hours")
+
+    # Every authored node declares its class and plane — required, no default (MP-08)
+    gaps.extend(validate_planes(pattern))
 
     # Provenance block must have authored_by and authored_at
     prov = pattern.get("_provenance", {})

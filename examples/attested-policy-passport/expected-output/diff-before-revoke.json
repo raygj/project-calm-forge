@@ -1,0 +1,32 @@
+{
+  "shadow": [
+    {
+      "edge_id": "kg://edges/v1/587277eddcd9b921df4385575f9997c3cdd7982c78447f447bd55b8380984cc4",
+      "verdict": "SHADOW_FLOW",
+      "detail": "no claim for this flow",
+      "source": "wl:payments-portal/analytics",
+      "destination": "wl:payments-portal/database"
+    }
+  ],
+  "contraction": [
+    {
+      "edge_id": "kg://edges/v1/123b13f1a05cb9b8b13139434e218021ab98d3ee4641f065aa59e42fac3696a8",
+      "verdict": "CONTRACTION_CANDIDATE",
+      "detail": "granted but never observed",
+      "source": "wl:payments-portal/api-service",
+      "destination": "wl:payments-portal/database",
+      "port_source": "declared-interface"
+    }
+  ],
+  "conformant": [
+    {
+      "edge_id": "kg://edges/v1/6cddff5734fc8c2b0a9ab2c318873f62b409e83109e7b6b54a0d1b91ea20b2aa",
+      "verdict": "CONFORMANT",
+      "detail": "flow matches current grant",
+      "source": "wl:payments-portal/web-frontend",
+      "destination": "wl:payments-portal/api-service",
+      "port_source": "declared-interface"
+    }
+  ],
+  "unadjudicable": []
+}

@@ -1,0 +1,11 @@
+# OpenTelemetry Weaver registry manifest for the forge.* namespace.
+# ADR-014 §1/§3: registry-as-code in upstream OTel semconv YAML, living in-repo
+# under semconv/ until a second emitter triggers promotion to a standalone repo.
+name: forge
+description: >
+  Semantic conventions for the forge.* namespace — the observed-side vocabulary a
+  workload emits to announce its Attested Policy Passport by reference over
+  OpenTelemetry (ADR-009). Reference only, never proof: authorization is always
+  verified graph-side. This registry is the source of truth for the namespace and
+  the input to the generated typed constants the emitters import.
+schema_url: https://calm-forge.dev/schemas/semconv/0.1.0

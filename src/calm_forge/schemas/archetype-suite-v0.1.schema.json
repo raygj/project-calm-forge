@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calm-forge/schemas/archetype-suite-v0.1.schema.json",
+  "title": "Archetype suite v0.1 (ADR-013 §4)",
+  "description": "The Gate's policy: a versioned suite of application personas, each carrying the estate evidence that justifies it. A suite with zero personas is representable — that is the state until the design pass authors content. An archetype without coverage evidence is not representable: a persona nobody can audit for ossification is the MP-32 trap.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["archetype_suite", "suite_version"],
+  "properties": {
+    "archetype_suite": {
+      "const": "0.1",
+      "description": "Reader dispatch key. An unknown version MUST raise, never fall back (MP-02)."
+    },
+    "suite_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human suite version (v0, v1, …). Identity of the suite node; the digest is of content, not of this label."
+    },
+    "description": { "type": "string" },
+    "archetypes": {
+      "type": "array",
+      "description": "Empty is valid. Each entry, when present, MUST carry coverage evidence.",
+      "items": { "$ref": "#/$defs/archetype" }
+    }
+  },
+  "$defs": {
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workload_classes", "basis"],
+      "properties": {
+        "workload_classes": {
+          "type": "array",
+          "description": "Which production workload classes this persona represents, and at what count. Stored evidence — not derived from the persona's name.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["class", "count"],
+            "properties": {
+              "class": { "type": "string", "minLength": 1 },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many production workloads of this class the persona stands for."
+              }
+            }
+          }
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1,
+          "description": "How the counts were measured. Without a basis the numbers are a claim, not evidence (ADR-013 §4, MP-32)."
+        }
+      }
+    },
+    "archetype": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "coverage"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable persona id. The design pass names these; this schema does not invent them."
+        },
+        "purpose": { "type": "string" },
+        "checks": {
+          "type": "array",
+          "description": "Test-suite definition this persona exercises (ADR-013 §4). Optional until the design pass fills it.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "dependency_surface": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ecosystems": { "type": "array", "items": { "type": "string" } },
+            "packages": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "coverage": { "$ref": "#/$defs/coverage" }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "registry": "acme-appreg",
+  "version": "2026-08-21",
+  "entries": [
+    {
+      "anchor_id": "APP-10432",
+      "application": {"name": "payments-portal", "criticality": "tier-1"},
+      "accountable": {"id": "E44921", "identity_class": "human"},
+      "associated": [
+        {"id": "E44930", "identity_class": "human", "role": "delegate"},
+        {"id": "FID-payments-svc", "identity_class": "functional_id"},
+        {"id": "spiffe://acme/ns/payments/sa/web", "identity_class": "spiffe"}
+      ],
+      "props": {"cost_center": "CC-4410"}
+    },
+    {
+      "anchor_id": "APP-20155",
+      "application": {"name": "fraud-scoring", "criticality": "tier-2"},
+      "accountable": {"id": "SVC-fraud-ops", "identity_class": "service_account"}
+    },
+    {
+      "anchor_id": "APP-30011",
+      "application": {"name": "ledger-core"},
+      "accountable": [{"id": "E10001", "identity_class": "human"},
+                      {"id": "E10002", "identity_class": "human"}]
+    },
+    {
+      "anchor_id": "APP-40222",
+      "application": {"name": "reporting"},
+      "accountable": {"id": "E55010"}
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+apiVersion: v3.0.2
+kind: DataContract
+id: payments-settled-v1
+name: Settled Payments
+version: 1.2.0
+status: active
+domain: payments
+tenant: acme
+dataProduct: settlement
+
+description:
+  purpose: Authoritative settled-payment records for finance and regulatory reporting.
+  limitations: Not for real-time authorisation decisions; settled T+1.
+  usage: Read-only. Cardholder data is tokenised at source.
+
+tags: [pci, regulated, tier-1]
+
+servers:
+  - server: warehouse-eu
+    type: postgres
+    host: warehouse.internal
+    port: 5432
+    database: analytics
+    schema: mart
+
+team:
+  - username: dpo-steward
+    role: Data Steward
+  - username: fin-analytics-lead
+    role: Producer
+
+slaProperties:
+  - property: latency
+    value: 24
+    unit: h
+    element: mart.settled.txn_ts
+  - property: retention
+    value: 7
+    unit: y
+
+schema:
+  - name: settled
+    physicalName: mart.settled
+    logicalType: object
+    physicalType: table
+    description: One row per settled transaction.
+    dataGranularityDescription: One row per transaction per settlement run.
+    properties:
+      - name: txn_ts
+        logicalType: date
+        physicalType: timestamp
+        required: true
+        partitioned: true
+        classification: internal
+      - name: amount
+        logicalType: number
+        physicalType: decimal
+        required: true
+        classification: internal
+        quality:
+          - rule: nullCheck
+            mustBe: 0
+      - name: pan_token
+        logicalType: string
+        physicalType: varchar
+        required: true
+        classification: restricted
+        description: Tokenised PAN. Never the primary account number itself.

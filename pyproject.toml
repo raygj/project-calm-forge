@@ -25,6 +25,15 @@ graph = [
     "kuzu>=0.6",
     "falkordb>=1.0",
 ]
+passport = [
+    "cryptography>=42.0",
+    "jsonschema>=4.0",
+]
+spire = [
+    "cryptography>=42.0",
+    "jsonschema>=4.0",
+    "spiffe>=0.2",
+]
 dev = [
     "pytest>=7.0",
     "ruff>=0.4",
@@ -34,6 +43,7 @@ dev = [
     "uvicorn[standard]>=0.29",
     "PyJWT>=2.8",
     "cryptography>=42.0",
+    "jsonschema>=4.0",
     "httpx>=0.27",
     "mcp>=1.0,<2",
 ]
@@ -44,6 +54,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "calm_forge.opa_policies" = ["*.rego"]
 "calm_forge.knowledge_graph" = ["*.json"]
+"calm_forge.schemas" = ["*.json"]
 
 [tool.ruff]
 line-length = 100

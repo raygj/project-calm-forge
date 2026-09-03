@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "What the running fabric reports it listens on (APP-093). This is the shape",
+    "inventory actually hands us — listeners per workload, not edges — so one record",
+    "resolves every declared edge pointing at that workload.",
+    "",
+    "This stack declares `protocol: internal` with no interfaces, so the compiler",
+    "cannot resolve a port from intent alone. Inventory fills the gap and stamps",
+    "port_source=inventory, which is deliberately weaker evidence than a declared",
+    "port: it says what IS, not what was INTENDED. The remaining work — declaring",
+    "these ports in CALM — stays visible rather than being quietly closed.",
+    "",
+    "`external-state` is listed twice on purpose: a workload listening on two ports",
+    "does not tell us which one an edge uses, so that edge stays UNADJUDICABLE.",
+    "Guessing would fabricate a precise claim out of imprecise evidence."
+  ],
+  "listeners": [
+    {
+      "workload_urn": "wl:fraud-detection-pipeline/ml-scoring",
+      "transport": "tcp",
+      "port": 8500,
+      "discovered_by": "kubernetes-service"
+    },
+    {
+      "workload_urn": "wl:fraud-detection-pipeline/decision-emitter",
+      "transport": "tcp",
+      "port": 9500,
+      "discovered_by": "kubernetes-service"
+    },
+    {
+      "workload_urn": "wl:fraud-detection-pipeline/external-state",
+      "transport": "tcp",
+      "port": 6379,
+      "discovered_by": "terraform-state"
+    },
+    {
+      "workload_urn": "wl:fraud-detection-pipeline/external-state",
+      "transport": "tcp",
+      "port": 6380,
+      "discovered_by": "terraform-state"
+    }
+  ]
+}

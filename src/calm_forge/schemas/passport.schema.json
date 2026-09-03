@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calm-forge/schemas/passport.schema.json",
+  "title": "Attested Policy Passport",
+  "description": "Signed, identity-anchored, graph-referenced projection of a KG edge. Crawl-stage (v0.1). The proof is an Ed25519 signature over the JCS-canonicalized body with `proof` excluded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "passport_version",
+    "passport_id",
+    "spiffe_id",
+    "intent_metadata",
+    "network_binding",
+    "claim",
+    "graph_ref",
+    "lifecycle",
+    "proof"
+  ],
+  "properties": {
+    "passport_version": {
+      "type": "string",
+      "const": "0.1",
+      "description": "Passport wire-format version."
+    },
+    "passport_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "Unique per claim instance (UUID v4)."
+    },
+    "spiffe_id": {
+      "$ref": "#/$defs/spiffe_id",
+      "description": "Source workload identity. SPIFFE is should-be in most enterprises today; this is the substrate the loop drifts toward, not deployed reality."
+    },
+    "intent_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["business_justification", "environment", "requested_by"],
+      "properties": {
+        "ticket_id": { "type": "string" },
+        "business_justification": { "type": "string", "minLength": 1 },
+        "environment": {
+          "type": "string",
+          "enum": ["production", "staging", "development", "test"]
+        },
+        "requested_by": { "$ref": "#/$defs/spiffe_id" },
+        "compliance_scope": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Compliance requirements this edge satisfies, e.g. PCI-DSS-v4:req-1. Sourced from KG compliance_scope. Ties the grant to the audit control it serves."
+        },
+        "data_classification": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"],
+          "description": "Sensitivity of data crossing this edge. Sourced from CALM metadata.data-classification. Informs blast-radius / authority handling (APP-084)."
+        }
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Accountability + routing context. Not part of edge identity or enforcement. All fields optional.",
+      "properties": {
+        "owner": { "type": "string" },
+        "team": { "type": "string" },
+        "cost_center": { "type": "string" },
+        "application_name": { "type": "string" },
+        "sla_tier": { "type": "string" }
+      }
+    },
+    "network_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_workload",
+        "source_workload_urn",
+        "destination_workload",
+        "destination_workload_urn",
+        "transport",
+        "direction"
+      ],
+      "oneOf": [
+        { "required": ["port"], "description": "single port" },
+        { "required": ["port_range"], "description": "contiguous range" },
+        {
+          "required": ["port_wildcard"],
+          "properties": { "port_wildcard": { "const": true } },
+          "description": "authored wildcard — every port on this path is deliberately granted (APP-090)"
+        },
+        {
+          "required": ["port_unspecified"],
+          "properties": { "port_unspecified": { "const": true } },
+          "description": "no resolvable port — not a precise 5-tuple rule, and NOT a grant of every port (APP-000 §6, APP-090)"
+        }
+      ],
+      "properties": {
+        "source_workload": { "type": "string" },
+        "source_workload_urn": { "$ref": "#/$defs/workload_urn" },
+        "source_spiffe_id": { "$ref": "#/$defs/spiffe_id" },
+        "destination_workload": { "type": "string" },
+        "destination_workload_urn": { "$ref": "#/$defs/workload_urn" },
+        "destination_spiffe_id": { "$ref": "#/$defs/spiffe_id" },
+        "transport": {
+          "type": "string",
+          "enum": ["tcp", "udp"],
+          "description": "L4 transport — part of edge identity. NOT the app protocol."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Single destination port. Exactly one of port / port_range / port_unspecified."
+        },
+        "port_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "description": "Contiguous destination port range, inclusive. In edge_id as port=LO-HI (LO==HI collapses to a single port).",
+          "properties": {
+            "from": { "type": "integer", "minimum": 0, "maximum": 65535 },
+            "to": { "type": "integer", "minimum": 0, "maximum": 65535 }
+          }
+        },
+        "port_unspecified": {
+          "type": "boolean",
+          "description": "True when no port could be resolved — an admission of ignorance, NOT permission. edge_id uses port=any, but the reverse diff refuses to adjudicate the edge rather than inferring a grant. See APP-000 §6, APP-090."
+        },
+        "port_wildcard": {
+          "type": "boolean",
+          "description": "True when an author deliberately granted every port on this path. Shares the port=any edge_id with port_unspecified — same L4 tuple, same identity — but is a real grant, so an observed flow on this path is conformant (and a narrowing candidate). See APP-090."
+        },
+        "port_source": {
+          "type": "string",
+          "enum": [
+            "declared-interface",
+            "declared-override",
+            "protocol-default",
+            "inventory",
+            "wildcard",
+            "unresolved"
+          ],
+          "description": "How the port was arrived at — the evidence behind the claim, strongest first. Descriptive only: deliberately excluded from edge_id so learning a port from inventory never churns the id of an edge already claimed. See APP-090."
+        },
+        "app_protocol": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Descriptive L7 label(s): HTTPS, mTLS, TLS, postgres, grpc. An array because multiple L7 protocols can legitimately share one L4 edge. Excluded from edge_id so observed L4 flows still match declared claims."
+        },
+        "authentication": {
+          "type": "string",
+          "description": "Descriptive: how the path authenticates (vault-pki, mTLS-vault-pki, vault-dynamic-credentials). Security-relevant context for the northbound 'why this path exists' story; not part of edge identity."
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["egress", "ingress"],
+          "description": "From the source (initiator) perspective. Ordering of src/dst is the canonical direction."
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_type", "tense", "authority_class"],
+      "properties": {
+        "claim_type": {
+          "type": "string",
+          "enum": ["grant", "revoke"],
+          "description": "revoke = tombstone / DELETE-AFTER edge as a first-class signed object."
+        },
+        "tense": {
+          "type": "string",
+          "enum": ["is", "should-be", "will-be"],
+          "description": "Control-loop state. will-be = in-flight expansion or an edge on death row."
+        },
+        "authority_class": {
+          "type": "string",
+          "enum": ["governed-expansion", "autonomic-contraction"],
+          "description": "The safety split. Contraction is autonomic (low authority, reversible); expansion is governed (PAP-signed)."
+        }
+      }
+    },
+    "graph_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edge_id", "source", "confidence"],
+      "description": "*** THE SELL — this makes the passport a graph projection, not a config file. Required on every passport. ***",
+      "properties": {
+        "edge_id": {
+          "type": "string",
+          "pattern": "^kg://edges/v[0-9]+/[0-9a-f]{64}$",
+          "description": "Stable KG edge id. See APP-000: kg://edges/v1/<sha256 over the L4 identity tuple>."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["observed", "declared", "inventory"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "authored_by": {
+          "type": "string",
+          "description": "Who authored the KG edge (distinct from proof.issuer, who signed the passport). Sourced from KG _provenance.authored_by."
+        },
+        "authored_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the KG edge was authored (ISO 8601). Sourced from KG _provenance.authored_at."
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issued_at", "expires_at"],
+      "properties": {
+        "issued_at": {
+          "type": "integer",
+          "description": "Unix epoch seconds."
+        },
+        "expires_at": {
+          "type": "integer",
+          "description": "Unix epoch seconds. No renewal → edge lapses → rule becomes a contraction candidate. Expiry, not grace timer."
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer", "algorithm", "canonicalization", "signature_b64"],
+      "properties": {
+        "issuer": { "$ref": "#/$defs/spiffe_id" },
+        "algorithm": {
+          "type": "string",
+          "enum": ["ed25519", "ecdsa-p256"],
+          "description": "Signature scheme. `ed25519` is the crawl/demo default (deterministic). `ecdsa-p256` (ES256) is used when signing with a SPIRE X509-SVID leaf key, which is EC P-256 (APP-080)."
+        },
+        "canonicalization": {
+          "type": "string",
+          "const": "jcs",
+          "description": "RFC 8785 canonical JSON, then sign. Signature covers the body with `proof` excluded."
+        },
+        "public_key_b64": {
+          "type": "string",
+          "description": "Signing public key, base64. Encoding follows `algorithm`: ed25519 → raw 32 bytes; ecdsa-p256 → DER SubjectPublicKeyInfo. Stubbed single-key JWKS in crawl; trust-bundle governance is walk/run."
+        },
+        "signature_b64": {
+          "type": "string",
+          "description": "Ed25519 signature over the JCS-canonicalized body (proof excluded), base64."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "spiffe_id": {
+      "type": "string",
+      "pattern": "^spiffe://[a-z0-9._-]+/.+$"
+    },
+    "workload_urn": {
+      "type": "string",
+      "pattern": "^wl:[^/]+/.+$",
+      "description": "Canonical identity-system-agnostic workload id, e.g. wl:3tier-pci/web-tier. See APP-000 §4."
+    }
+  }
+}

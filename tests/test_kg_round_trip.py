@@ -23,6 +23,8 @@ def test_round_trip_ready_minimal_valid(tmp_path: Path) -> None:
         "purpose": "Test",
         "owner": "test-team",
         "_provenance": {"authored_by": "test", "authored_at": "2026-04-21T00:00:00Z"},
+        "node_class": "authored",
+        "plane": "architecture",
         "policies": [],
     }
     gaps = assert_round_trip_ready(pattern)

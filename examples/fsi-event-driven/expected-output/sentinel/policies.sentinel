@@ -12,20 +12,21 @@ import "tfrun"
 # All storage resources must enable server-side encryption.
 # ============================================================
 
-encryption_violations = filter tfplan.resource_changes as _, rc {
-  rc.type is "azurerm_storage_account" and
-  rc.change.after.enable_https_traffic_only is not true
+encryption_aws_ebs_volume_violations = filter tfplan.resource_changes as _, rc {
+  rc.type is "aws_ebs_volume" and
+  rc.change.after.encrypted is not true
 }
 
-storage_encryption_violations = filter tfplan.resource_changes as _, rc {
-  rc.type is "azurerm_managed_disk" and
-  (rc.change.after.encryption_settings is null or
-   rc.change.after.encryption_settings.enabled is not true)
+encryption_aws_db_instance_violations = filter tfplan.resource_changes as _, rc {
+  rc.type is "aws_db_instance" and
+  rc.change.after.storage_encrypted is not true
 }
+
+# TODO(aws-sme): ratify S3 server-side encryption (aws_s3_bucket_server_side_encryption_configuration — provider v4+)
 
 rule "enforce_encryption_at_rest" {
-  condition = length(encryption_violations) is 0 and
-              length(storage_encryption_violations) is 0
+  condition = length(encryption_aws_ebs_volume_violations) is 0 and
+              length(encryption_aws_db_instance_violations) is 0
   enforcement_level = "hard-mandatory"
 }
 
@@ -34,20 +35,21 @@ rule "enforce_encryption_at_rest" {
 # PCI-scoped workloads must not expose public ingress.
 # ============================================================
 
-public_ingress_violations = filter tfplan.resource_changes as _, rc {
-  rc.type is "kubernetes_ingress_v1" and
-  rc.change.after.metadata[0].annotations["kubernetes.io/ingress.class"] is "public"
+public_aws_db_instance_violations = filter tfplan.resource_changes as _, rc {
+  rc.type is "aws_db_instance" and
+  rc.change.after.publicly_accessible is true
 }
 
-public_lb_violations = filter tfplan.resource_changes as _, rc {
-  rc.type is "kubernetes_service_v1" and
-  rc.change.after.spec[0].type is "LoadBalancer" and
-  (rc.change.after.metadata[0].annotations["service.beta.kubernetes.io/azure-load-balancer-internal"] is not "true")
+public_aws_lb_violations = filter tfplan.resource_changes as _, rc {
+  rc.type is "aws_lb" and
+  rc.change.after.internal is not true
 }
+
+# TODO(aws-sme): ratify security-group ingress from 0.0.0.0/0 (aws_security_group — iterate ingress rules)
 
 rule "deny_public_endpoints" {
-  condition = length(public_ingress_violations) is 0 and
-              length(public_lb_violations) is 0
+  condition = length(public_aws_db_instance_violations) is 0 and
+              length(public_aws_lb_violations) is 0
   enforcement_level = "hard-mandatory"
 }
 

@@ -1,0 +1,405 @@
+[
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "3-tier-pci.json",
+        "digest": {
+          "sha256": "5f8fa8e289a4a133afcfd920fafbce12fb736b851a3d66a53278bccf12fd4c2a"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "compliance:PCI-DSS-v4:req-1",
+            "compliance:PCI-DSS-v4:req-7",
+            "compliance:PCI-DSS-v4:req-8",
+            "workload:3tier-pci:api-tier",
+            "workload:3tier-pci:db-tier",
+            "workload:3tier-pci:policy:data-residency",
+            "workload:3tier-pci:policy:db-isolation",
+            "workload:3tier-pci:policy:decommission-on-cert-expiry",
+            "workload:3tier-pci:policy:dynamic-creds-required",
+            "workload:3tier-pci:policy:pci-cluster-placement",
+            "workload:3tier-pci:v2",
+            "workload:3tier-pci:web-tier"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/3-tier-pci.json",
+            "digest": {
+              "sha256": "7c37634b6bffb6e5b0053d5c74f69956e1985de252d337bd66e3eac3ae45ab57"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:7c37634b6bffb6e5b0053d5c74f69956e1985de252d337bd66e3eac3ae45ab57"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  },
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "brownfield-mcp-intake.json",
+        "digest": {
+          "sha256": "a4bd3f1e9713f7644bc6f8e8936dc398e29ba17429db17b63100c1f29b16b8c5"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "workload:legacy-payment-processor:policy:capability-gap-alert",
+            "workload:legacy-payment-processor:policy:drift-detection",
+            "workload:legacy-payment-processor:policy:reconstructed-placement",
+            "workload:legacy-payment-processor:v1"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/brownfield-mcp-intake.json",
+            "digest": {
+              "sha256": "5870a39a5ef17c4b5eb991774140d8a2591c5d1f92f56e25c69b098ecba8f64b"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:5870a39a5ef17c4b5eb991774140d8a2591c5d1f92f56e25c69b098ecba8f64b"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  },
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "event-driven.json",
+        "digest": {
+          "sha256": "ddc3df714985b336ebcbf7648f5975f3c90d6527547fd90d0af98e96e5e00d58"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "<unknown>"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/event-driven.json",
+            "digest": {
+              "sha256": "66c5640549ee441829f00ebdbdd3748ef27d0068712da42f5dcfcc44cad760fb"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:66c5640549ee441829f00ebdbdd3748ef27d0068712da42f5dcfcc44cad760fb"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  },
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "fraud-detection-pipeline.json",
+        "digest": {
+          "sha256": "6c802de1cace13462f0ce54fb17adc6ed5f754466b05f4b0c11e415ee38bcfde"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "workload:fraud-detection-pipeline:decision",
+            "workload:fraud-detection-pipeline:ingest",
+            "workload:fraud-detection-pipeline:policy:capability-ceiling",
+            "workload:fraud-detection-pipeline:policy:confidential-compute",
+            "workload:fraud-detection-pipeline:policy:data-residency",
+            "workload:fraud-detection-pipeline:policy:drift-alert",
+            "workload:fraud-detection-pipeline:policy:latency-ceiling",
+            "workload:fraud-detection-pipeline:policy:scoring-isolation",
+            "workload:fraud-detection-pipeline:policy:state-portability",
+            "workload:fraud-detection-pipeline:scoring",
+            "workload:fraud-detection-pipeline:state",
+            "workload:fraud-detection-pipeline:v1"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/fraud-detection-pipeline.json",
+            "digest": {
+              "sha256": "bced5bdc6045cb3ab717186581285406bc0491b1a4549e054f51fcb1eda3da53"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:bced5bdc6045cb3ab717186581285406bc0491b1a4549e054f51fcb1eda3da53"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  },
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "healthcare-hl7-pipeline.json",
+        "digest": {
+          "sha256": "f419701aba347f61e51c663130a9c61463e225539c130f5a51b6cb06eae4b0b3"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "workload:healthcare-hl7-pipeline",
+            "workload:healthcare-hl7-pipeline:audit-emitter",
+            "workload:healthcare-hl7-pipeline:fhir-gateway",
+            "workload:healthcare-hl7-pipeline:hl7-transformer",
+            "workload:healthcare-hl7-pipeline:patient-index",
+            "workload:healthcare-hl7-pipeline:policy:capability-ceiling",
+            "workload:healthcare-hl7-pipeline:policy:data-residency"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/healthcare-hl7-pipeline.json",
+            "digest": {
+              "sha256": "73ec31661b6063b8fb245fdef093d97bcebd516d2db6a2c49ac4d94e71545344"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:73ec31661b6063b8fb245fdef093d97bcebd516d2db6a2c49ac4d94e71545344"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  },
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "identity-verification-kyc.json",
+        "digest": {
+          "sha256": "daed0851b47fbcd8d74d1f9c10525d32d5e8e2d682e985af697d4973d136c8c9"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "workload:identity-verification-kyc",
+            "workload:identity-verification-kyc:decision-store",
+            "workload:identity-verification-kyc:kyc-api",
+            "workload:identity-verification-kyc:pii-processor",
+            "workload:identity-verification-kyc:policy:capability-ceiling",
+            "workload:identity-verification-kyc:policy:data-residency",
+            "workload:identity-verification-kyc:sanctions-checker"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/identity-verification-kyc.json",
+            "digest": {
+              "sha256": "0aab2d36fc6f985f3d3f6eaa650477dcf26c3ab0df618cd1c82e1f23739fb777"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:0aab2d36fc6f985f3d3f6eaa650477dcf26c3ab0df618cd1c82e1f23739fb777"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  },
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "single-service.json",
+        "digest": {
+          "sha256": "5251735f87a232aa65306f930e2fd5f3c10a1f990de13a6ff48e8e827790867a"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "<unknown>"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/single-service.json",
+            "digest": {
+              "sha256": "e54a7f44cfc2a20c97f39d0e86e31c6178b92e621a2c0257fd4e2ccc483d6fb5"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:e54a7f44cfc2a20c97f39d0e86e31c6178b92e621a2c0257fd4e2ccc483d6fb5"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  },
+  {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "supply-chain-analytics.json",
+        "digest": {
+          "sha256": "1152b9da0f661f1324eb7dcdfc41e66e76d5d8b33e7305c76e6939e79abefb1c"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://calm-forge/buildtypes/kg-plane-backfill/v1",
+        "externalParameters": {
+          "migration": "kg-plane-backfill",
+          "node_class": "authored",
+          "plane": "architecture",
+          "stamped_ids": [
+            "workload:supply-chain-analytics",
+            "workload:supply-chain-analytics:analytics-engine",
+            "workload:supply-chain-analytics:api-surface",
+            "workload:supply-chain-analytics:event-ingest",
+            "workload:supply-chain-analytics:policy:capability-ceiling",
+            "workload:supply-chain-analytics:policy:data-residency",
+            "workload:supply-chain-analytics:portable-store"
+          ]
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "kg://documents/supply-chain-analytics.json",
+            "digest": {
+              "sha256": "7419629852d69a9dc7fd80218ef50fd15885b815eff82d81dbb266c278bc8a9e"
+            }
+          }
+        ],
+        "internalParameters": {
+          "source_version": "sha256:7419629852d69a9dc7fd80218ef50fd15885b815eff82d81dbb266c278bc8a9e"
+        }
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://calm-forge/builders/generate-stack@0.2.0"
+        },
+        "metadata": {
+          "startedOn": "2026-08-02T23:03:53Z",
+          "finishedOn": "2026-08-02T23:03:53Z"
+        }
+      }
+    }
+  }
+]

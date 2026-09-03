@@ -750,11 +750,11 @@ def generate_import_blocks(workspaces):
                 )
                 continue
 
-            # Convert workspace resource address to Stacks component address
-            # e.g., "aws_instance.web" → "component.web_service.aws_instance.web"
-            calm_type = RESOURCE_TYPE_MAP.get(res["type"], "unknown")
-            _sanitize_id(f"{ws['name']}_{calm_type}_{res['name']}")
-
+            # `to` is the original workspace resource address, kept verbatim —
+            # the same contract as generator._generate_import_blocks_from_calm.
+            # (An earlier draft rewrote it to a component-prefixed address; that
+            # form doesn't exist in the generated Stacks config, so import blocks
+            # built from it wouldn't bind. Don't reintroduce it.)
             blocks.append("import {")
             blocks.append(f"  to = {address}")
             blocks.append(f'  id = "{resource_id}"')

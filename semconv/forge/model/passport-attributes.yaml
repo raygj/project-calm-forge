@@ -1,0 +1,85 @@
+# Resource attributes — the standing passport announcement (ADR-009 §1).
+#
+# Placement rule (ADR-009 §1): these are resource and log-record attributes only,
+# never metric datapoint attributes — the metric-cardinality constraint is registry
+# metadata here, not tribal knowledge. It is stated in each attribute's note so the
+# generated docs carry it.
+#
+# Stability: v0.1 ships at `development` (the current schema value for what ADR-014 §3
+# calls the experimental → stable lifecycle). Promotion to `stable` is a PR with
+# maintainer review; removals follow OTel deprecation (marked, never deleted).
+groups:
+  - id: registry.forge.passport
+    type: attribute_group
+    display_name: Forge Passport
+    brief: >
+      The Attested Policy Passport (ADR-006) a workload announces by reference on every
+      signal it emits. A reference only — a workload claiming a passport proves nothing;
+      authorization is resolve-and-verify against the graph (ADR-009 §5).
+    attributes:
+      - id: forge.passport.id
+        type: string
+        stability: development
+        brief: The passport UUID. Reference only; never an authorization decision.
+        examples: ["7c2d9f11-4e8a-4b63-9d20-6f3b1a8c5e92"]
+        note: >
+          Resource and log-record placement only, never a metric datapoint attribute
+          (cardinality) — ADR-009 §1.
+      - id: forge.passport.edge_digest
+        type: string
+        stability: development
+        brief: >
+          The L4-tuple SHA-256 taken from the passport's edge_id (APP-000). Enables an
+          edge-level join to observed flows without resolving the passport.
+        examples:
+          ["6cddff5734fc8c2b0a9ab2c318873f62b409e83109e7b6b54a0d1b91ea20b2aa"]
+        note: >
+          Resource and log-record placement only, never a metric datapoint attribute
+          (cardinality) — ADR-009 §1.
+      - id: forge.passport.expires
+        type: int
+        stability: development
+        brief: >
+          Passport expiry as a Unix epoch in seconds. Lets the Collector flag
+          imminent expiry without graph access.
+        examples: [1803306600]
+        note: >
+          Resource and log-record placement only, never a metric datapoint attribute
+          (cardinality) — ADR-009 §1.
+
+  - id: registry.forge.anchor
+    type: attribute_group
+    display_name: Forge Accountability Anchor
+    brief: >
+      The accountability-anchor pointer for the workload (ADR-010). PII stays graph-side;
+      the telemetry carries only the reference.
+    attributes:
+      - id: forge.anchor.ref
+        type: string
+        stability: development
+        brief: >
+          Accountability-anchor reference, kg://anchor/<id> (ADR-010 §1). The pointer only —
+          no name, email, or employee id ever rides the telemetry.
+        examples: ["kg://anchor/APP-10432"]
+        note: >
+          Renamed from forge.seal.ref on 2026-08-21 (ADR-010 §6), together with
+          kg://seal/<id> → kg://anchor/<id>. The rename landed deliberately before this
+          registry existed; forge.seal.ref was never registered, generated, or published,
+          so it carries no deprecation entry — a deprecation mark would imply an emitter
+          once used it. Register forge.anchor.ref (ADR-014 A1).
+
+  - id: registry.forge.workload
+    type: attribute_group
+    display_name: Forge Workload
+    brief: The stable workload identity that anchors every declared↔observed join.
+    attributes:
+      - id: forge.workload.urn
+        type: string
+        stability: development
+        brief: >
+          Workload URN, wl:<app>/<component> — the stable join key across the fabric.
+          Complements, and does not replace, service.name.
+        examples: ["wl:payments-portal/web-frontend"]
+        note: >
+          Resource and log-record placement only, never a metric datapoint attribute
+          (cardinality) — ADR-009 §1.

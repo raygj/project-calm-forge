@@ -217,6 +217,26 @@ def test_query_empty_roots_returns_empty_list():
     assert result == []
 
 
+def test_query_where_dict_filters_by_value(kg_a, kg_b):
+    """`where` is typed as a dict; it must filter by value, not degrade to keys.
+
+    Regression: the body did `list(where or [])`, and `list({"region": "..."})`
+    yields `["region"]` — bare keys with no value — which kg_query rejects as a
+    malformed predicate. Every non-empty federated filter raised ValueError.
+    """
+    results = federated_kg_query(
+        [kg_a, kg_b], node_type="ExecutionEnvironment", where={"region": "eu-west-1"}
+    )
+    regions = {r["node"].get("region") for r in results if "node" in r}
+    assert regions == {"eu-west-1"}
+
+
+def test_query_empty_where_dict_matches_everything(kg_a):
+    filtered = federated_kg_query([kg_a], node_type="ExecutionEnvironment", where={})
+    unfiltered = federated_kg_query([kg_a], node_type="ExecutionEnvironment")
+    assert len(filtered) == len(unfiltered)
+
+
 # ---------------------------------------------------------------------------
 # federated_fabric_feed
 # ---------------------------------------------------------------------------

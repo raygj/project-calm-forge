@@ -1,0 +1,67 @@
+{
+  "catalog": {
+    "uuid": "9f5b1d1e-0f6a-4b2c-8a4a-1c2d3e4f5a6b",
+    "metadata": {
+      "title": "PCI DSS v4 — abridged control catalog (illustrative)",
+      "version": "4.0",
+      "oscal-version": "1.1.2"
+    },
+    "groups": [
+      {
+        "id": "req-3",
+        "title": "Protect stored account data",
+        "controls": [
+          {
+            "id": "req-3.5.1",
+            "title": "Render PAN unreadable wherever it is stored",
+            "params": [
+              {
+                "id": "allowed-encryption-algorithms",
+                "label": "approved algorithms for rendering PAN unreadable",
+                "values": ["AES-256", "KMS"]
+              },
+              {
+                "id": "minimum-key-length",
+                "label": "minimum symmetric key length in bits",
+                "values": ["128"]
+              }
+            ]
+          },
+          {
+            "id": "req-3.6.1",
+            "title": "Protect cryptographic keys",
+            "params": [
+              {
+                "id": "key-rotation-days",
+                "label": "maximum key lifetime in days",
+                "select": {"how-many": "one", "choice": ["90", "180", "365"]}
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "req-4",
+        "title": "Protect cardholder data with strong cryptography during transmission",
+        "controls": [
+          {
+            "id": "req-4.2.1",
+            "title": "Strong cryptography on open, public networks",
+            "params": [
+              {
+                "id": "minimum-tls-version",
+                "label": "minimum negotiated TLS version",
+                "values": ["1.2"]
+              },
+              {
+                "id": "mutual-tls-required",
+                "label": "whether both peers must present certificates",
+                "values": ["false"]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

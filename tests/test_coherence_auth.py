@@ -101,8 +101,8 @@ def test_auth_mode_normalizes_case_and_whitespace(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_allowed_from_env_var(monkeypatch):
-    monkeypatch.setenv("CALM_FORGE_COHERENCE_PEERS", "prod.fsi, peer.prod")
-    assert allowed_trust_domains() == {"prod.fsi", "peer.prod"}
+    monkeypatch.setenv("CALM_FORGE_COHERENCE_PEERS", "prod.fsi, starfly.prod")
+    assert allowed_trust_domains() == {"prod.fsi", "starfly.prod"}
 
 
 def test_allowed_env_strips_trust_domain_prefix(monkeypatch):
@@ -124,9 +124,9 @@ def test_allowed_from_trust_domain_nodes(monkeypatch, tmp_path):
         "@type": "TrustDomain",
         "spiffe_uri_prefix": "spiffe://prod.fsi",
         "commune": "forge",
-        "peer_trust_domains": ["trust_domain:peer.prod"],
+        "peer_trust_domains": ["trust_domain:starfly.prod"],
     }))
-    assert allowed_trust_domains(tmp_path) == {"peer.prod"}
+    assert allowed_trust_domains(tmp_path) == {"starfly.prod"}
 
 
 def test_allowed_env_takes_precedence_over_nodes(monkeypatch, tmp_path):
@@ -136,7 +136,7 @@ def test_allowed_env_takes_precedence_over_nodes(monkeypatch, tmp_path):
     (td_dir / "prod_fsi.json").write_text(json.dumps({
         "@id": "trust_domain:prod.fsi",
         "@type": "TrustDomain",
-        "peer_trust_domains": ["trust_domain:peer.prod"],
+        "peer_trust_domains": ["trust_domain:starfly.prod"],
     }))
     assert allowed_trust_domains(tmp_path) == {"override.domain"}
 
@@ -228,11 +228,11 @@ def test_spiffe_mode_peers_from_kg_trust_domain_nodes(monkeypatch, tmp_path):
     (td_dir / "prod_fsi.json").write_text(json.dumps({
         "@id": "trust_domain:prod.fsi",
         "@type": "TrustDomain",
-        "peer_trust_domains": ["trust_domain:peer.prod"],
+        "peer_trust_domains": ["trust_domain:starfly.prod"],
     }))
     import calm_forge.kg_coherence_api as kca
     monkeypatch.setattr(kca, "_kg_dir", Path(tmp_path))
-    cert = _spiffe_cert("spiffe://peer.prod/agent/reasoner")
+    cert = _spiffe_cert("spiffe://starfly.prod/agent/reasoner")
     _run(require_coherence_auth(_request_with_cert(cert)))  # no raise
 
 

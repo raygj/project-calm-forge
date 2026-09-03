@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calm-forge/schemas/requirements-v0.1.schema.json",
+  "title": "Requirements plane v0.1 (ADR-015)",
+  "description": "Forge-native schema for generative intent. This is the one plane where Forge mints rather than adopts, because the authoring community — product and application teams writing specs for generation — is converging on a practice with no ratified DSL. The schema is versioned and migration-ready: when spec-driven development ratifies a language, the plane migrates and the graph does not.",
+  "type": "object",
+  "required": ["requirements_schema"],
+  "properties": {
+    "requirements_schema": {
+      "const": "0.1",
+      "description": "Reader dispatch key. An unknown version MUST raise, never fall back to the newest known reader — a reader defaulting to the wrong branch silently misreads valid documents, and the failure surfaces as nonsense findings rather than as a parse error (MP-02)."
+    },
+    "actors": { "type": "array", "items": { "$ref": "#/$defs/actor" } },
+    "requirements": { "type": "array", "items": { "$ref": "#/$defs/requirement" } },
+    "target_states": { "type": "array", "items": { "$ref": "#/$defs/target_state" } }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "plane_tag": {
+      "type": "object",
+      "required": ["node_class", "plane"],
+      "properties": {
+        "node_class": {
+          "const": "authored",
+          "description": "Requirements author intent; they are never reference vocabulary."
+        },
+        "plane": {
+          "const": "requirements",
+          "description": "Required with no default, per MP-08. A silent fallback would land requirements nodes in the architecture plane invisibly."
+        }
+      }
+    },
+
+    "actor": {
+      "type": "object",
+      "required": ["id", "node_class", "plane", "name", "kind"],
+      "allOf": [
+        { "$ref": "#/$defs/plane_tag" },
+        {
+          "if": { "properties": { "kind": { "enum": ["system", "agent"] } } },
+          "then": {
+            "required": ["anchor_ref"],
+            "description": "An internal non-human actor MUST resolve to an accountability anchor. Autonomy lives in the execution; accountability never leaves the human (ADR-010)."
+          }
+        }
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^actor:[A-Za-z0-9._/-]+$" },
+        "node_class": true,
+        "plane": true,
+        "name": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["human", "system", "agent"],
+          "description": "Agents are actors. The anchor chain still terminates in a person: a non-human actor may hold `associated_with` and never `accountable_for` (ADR-010 §6a)."
+        },
+        "anchor_ref": {
+          "type": "string",
+          "pattern": "^kg://anchor/.+$",
+          "description": "The accountability anchor this actor is associated with. Optional for external human actors; required for internal system/agent actors. Never asserts accountability — the application registry is the sole system of record for that."
+        },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "requirement": {
+      "type": "object",
+      "required": ["id", "node_class", "plane", "actor", "story", "status"],
+      "allOf": [
+        { "$ref": "#/$defs/plane_tag" },
+        {
+          "if": { "properties": { "status": { "const": "ratified" } } },
+          "then": {
+            "required": ["acceptance"],
+            "properties": { "acceptance": { "minItems": 1 } },
+            "description": "A ratified requirement without acceptance is prose. Acceptance is what makes it executable, and executability is the whole claim."
+          }
+        }
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^req:[A-Za-z0-9._/-]+$" },
+        "node_class": true,
+        "plane": true,
+        "actor": { "type": "string", "pattern": "^actor:[A-Za-z0-9._/-]+$" },
+        "story": { "type": "string", "minLength": 1 },
+        "acceptance": {
+          "type": "array",
+          "description": "Gherkin, embedded rather than reinvented — the one part of this space with a real standard is adopted verbatim. Projects directly into test skeletons.",
+          "items": {
+            "type": "object",
+            "required": ["given", "when", "then"],
+            "properties": {
+              "given": { "type": "string", "minLength": 1 },
+              "when": { "type": "string", "minLength": 1 },
+              "then": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "priority": { "enum": ["must", "should", "could"] },
+        "status": { "enum": ["draft", "ratified", "superseded"] },
+        "realizes": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^kg://.+$" },
+          "description": "Authored artifacts this requirement begat. The generative sibling of `governs`: `governs` points down the authority chain, `realizes` points forward through generation."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "target_state": {
+      "type": "object",
+      "required": ["id", "node_class", "plane", "assertions"],
+      "allOf": [{ "$ref": "#/$defs/plane_tag" }],
+      "properties": {
+        "id": { "type": "string", "pattern": "^ts:[A-Za-z0-9._/-]+$" },
+        "node_class": true,
+        "plane": true,
+        "assertions": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Properties the instantiated system must hold, never the platform that provides them: `compute_type: isolated_ephemeral`, not `runtime: lambda`. The graph must not change when a deployment technology does.",
+          "additionalProperties": { "type": ["string", "number", "boolean"] }
+        },
+        "realizes": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^kg://.+$" }
+        },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "description": "NOTE: there is deliberately no `realized_by` property. It is derived on read from inbound `realizes` edges (see intake_requirements.realized_by). Stored, it would enter the node's content digest, so generating an artifact would mutate the intent it was generated from and REQUIREMENTS_NEWER_THAN_CODE would compare against a value that moves every time code is generated."
+    }
+  }
+}

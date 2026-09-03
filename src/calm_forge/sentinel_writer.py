@@ -1,5 +1,37 @@
 """Sentinel policy generation — compliance gates from CALM metadata."""
 
+from .policy_targets import (
+    AWS_ENCRYPTION_AT_REST,
+    AWS_ENCRYPTION_TODO,
+    AWS_NO_PUBLIC_ENDPOINTS,
+    AWS_PUBLIC_ENDPOINT_TODO,
+    cloud_provider_of,
+)
+
+
+def _sentinel_violation_filters(targets, prefix):
+    """One `<prefix>_<resource>_violations = filter ...` block per AWS target, plus var names.
+
+    Shared AWS resource targets (policy_targets) rendered into Sentinel's filter syntax, so
+    Sentinel and tfpolicy check the *same* AWS resources without a second source of truth.
+
+    ``prefix`` scopes the variable name to its predicate: the same resource type can appear
+    under two predicates (``aws_db_instance`` is checked for both encryption *and* public
+    access), and Sentinel's variables share one flat namespace — an unprefixed name would
+    redefine, and the first rule would silently bind the second predicate's filter.
+    """
+    lines: list[str] = []
+    var_names: list[str] = []
+    for t in targets:
+        var = f"{prefix}_{t.resource_type}_violations"
+        var_names.append(var)
+        lines.append(f"{var} = filter tfplan.resource_changes as _, rc {{")
+        lines.append(f'  rc.type is "{t.resource_type}" and')
+        lines.append(f"  {t.sentinel_violation}")
+        lines.append("}")
+        lines.append("")
+    return lines, var_names
+
 
 def _header(metadata):
     compliance = metadata.get("compliance-scope", "general")
@@ -23,6 +55,7 @@ def write_sentinel_policies(metadata, component_map, decorators):
     compliance = metadata.get("compliance-scope", "general")
     data_class = metadata.get("data-classification", "internal")
     app_name = metadata.get("application-name", "app")
+    cloud = cloud_provider_of(decorators)
 
     lines = [_header(metadata)]
     lines.append('import "tfplan/v2" as tfplan')
@@ -36,23 +69,35 @@ def write_sentinel_policies(metadata, component_map, decorators):
         lines.append("# All storage resources must enable server-side encryption.")
         lines.append("# ============================================================")
         lines.append("")
-        lines.append("encryption_violations = filter tfplan.resource_changes as _, rc {")
-        lines.append('  rc.type is "azurerm_storage_account" and')
-        lines.append("  rc.change.after.enable_https_traffic_only is not true")
-        lines.append("}")
-        lines.append("")
-        lines.append("storage_encryption_violations = filter tfplan.resource_changes as _, rc {")
-        lines.append('  rc.type is "azurerm_managed_disk" and')
-        lines.append('  (rc.change.after.encryption_settings is null or')
-        lines.append('   rc.change.after.encryption_settings.enabled is not true)')
-        lines.append("}")
-        lines.append("")
-        lines.append('rule "enforce_encryption_at_rest" {')
-        lines.append("  condition = length(encryption_violations) is 0 and")
-        lines.append("              length(storage_encryption_violations) is 0")
-        lines.append('  enforcement_level = "hard-mandatory"')
-        lines.append("}")
-        lines.append("")
+        if cloud == "aws":
+            filters, var_names = _sentinel_violation_filters(AWS_ENCRYPTION_AT_REST, "encryption")
+            lines += filters
+            lines.append(f"# {AWS_ENCRYPTION_TODO}")
+            lines.append("")
+            condition = " and\n              ".join(f"length({v}) is 0" for v in var_names)
+            lines.append('rule "enforce_encryption_at_rest" {')
+            lines.append(f"  condition = {condition}")
+            lines.append('  enforcement_level = "hard-mandatory"')
+            lines.append("}")
+            lines.append("")
+        else:
+            lines.append("encryption_violations = filter tfplan.resource_changes as _, rc {")
+            lines.append('  rc.type is "azurerm_storage_account" and')
+            lines.append("  rc.change.after.enable_https_traffic_only is not true")
+            lines.append("}")
+            lines.append("")
+            lines.append("storage_encryption_violations = filter tfplan.resource_changes as _, rc {")
+            lines.append('  rc.type is "azurerm_managed_disk" and')
+            lines.append('  (rc.change.after.encryption_settings is null or')
+            lines.append('   rc.change.after.encryption_settings.enabled is not true)')
+            lines.append("}")
+            lines.append("")
+            lines.append('rule "enforce_encryption_at_rest" {')
+            lines.append("  condition = length(encryption_violations) is 0 and")
+            lines.append("              length(storage_encryption_violations) is 0")
+            lines.append('  enforcement_level = "hard-mandatory"')
+            lines.append("}")
+            lines.append("")
 
         # --- PCI-DSS: No public endpoints ---
         lines.append("# ============================================================")
@@ -60,23 +105,35 @@ def write_sentinel_policies(metadata, component_map, decorators):
         lines.append("# PCI-scoped workloads must not expose public ingress.")
         lines.append("# ============================================================")
         lines.append("")
-        lines.append("public_ingress_violations = filter tfplan.resource_changes as _, rc {")
-        lines.append('  rc.type is "kubernetes_ingress_v1" and')
-        lines.append('  rc.change.after.metadata[0].annotations["kubernetes.io/ingress.class"] is "public"')
-        lines.append("}")
-        lines.append("")
-        lines.append("public_lb_violations = filter tfplan.resource_changes as _, rc {")
-        lines.append('  rc.type is "kubernetes_service_v1" and')
-        lines.append('  rc.change.after.spec[0].type is "LoadBalancer" and')
-        lines.append('  (rc.change.after.metadata[0].annotations["service.beta.kubernetes.io/azure-load-balancer-internal"] is not "true")')
-        lines.append("}")
-        lines.append("")
-        lines.append('rule "deny_public_endpoints" {')
-        lines.append("  condition = length(public_ingress_violations) is 0 and")
-        lines.append("              length(public_lb_violations) is 0")
-        lines.append('  enforcement_level = "hard-mandatory"')
-        lines.append("}")
-        lines.append("")
+        if cloud == "aws":
+            filters, var_names = _sentinel_violation_filters(AWS_NO_PUBLIC_ENDPOINTS, "public")
+            lines += filters
+            lines.append(f"# {AWS_PUBLIC_ENDPOINT_TODO}")
+            lines.append("")
+            condition = " and\n              ".join(f"length({v}) is 0" for v in var_names)
+            lines.append('rule "deny_public_endpoints" {')
+            lines.append(f"  condition = {condition}")
+            lines.append('  enforcement_level = "hard-mandatory"')
+            lines.append("}")
+            lines.append("")
+        else:
+            lines.append("public_ingress_violations = filter tfplan.resource_changes as _, rc {")
+            lines.append('  rc.type is "kubernetes_ingress_v1" and')
+            lines.append('  rc.change.after.metadata[0].annotations["kubernetes.io/ingress.class"] is "public"')
+            lines.append("}")
+            lines.append("")
+            lines.append("public_lb_violations = filter tfplan.resource_changes as _, rc {")
+            lines.append('  rc.type is "kubernetes_service_v1" and')
+            lines.append('  rc.change.after.spec[0].type is "LoadBalancer" and')
+            lines.append('  (rc.change.after.metadata[0].annotations["service.beta.kubernetes.io/azure-load-balancer-internal"] is not "true")')
+            lines.append("}")
+            lines.append("")
+            lines.append('rule "deny_public_endpoints" {')
+            lines.append("  condition = length(public_ingress_violations) is 0 and")
+            lines.append("              length(public_lb_violations) is 0")
+            lines.append('  enforcement_level = "hard-mandatory"')
+            lines.append("}")
+            lines.append("")
 
     # --- Cost governance (all scopes) ---
     lines.append("# ============================================================")

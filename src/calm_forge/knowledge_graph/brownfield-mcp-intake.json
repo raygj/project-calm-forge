@@ -4,16 +4,19 @@
   "@id": "workload:legacy-payment-processor:v1",
   "version": "1.0.0",
   "name": "legacy-payment-processor",
-  "purpose": "Brownfield payment processor — existing workload being onboarded into the intent graph via MCP intake from Red Hat ACM and Ansible Automation Platform. Demonstrates KG population from live system state, enabling the diff engine to detect drift against reconstructed intent.",
+  "purpose": "Brownfield payment processor \u2014 existing workload being onboarded into the intent graph via MCP intake from Red Hat ACM and Ansible Automation Platform. Demonstrates KG population from live system state, enabling the diff engine to detect drift against reconstructed intent.",
   "owner": "payments-platform",
-  "declared_capabilities": ["http_read", "http_write", "vault_dynamic_creds"],
+  "declared_capabilities": [
+    "http_read",
+    "http_write",
+    "vault_dynamic_creds"
+  ],
   "_provenance": {
     "authored_by": "calm-forge/mcp/acm-intake",
     "authored_at": "2026-04-20T00:00:00Z",
     "intake_source": "acm-mcp/cluster-service-provider",
     "intake_version": "1.0.0"
   },
-
   "placement_nodes": [
     {
       "@type": "Placement",
@@ -23,7 +26,11 @@
       "placed_at": "2025-11-14T09:23:00Z",
       "placed_by": "acm-mcp/cluster-intake",
       "attestation_level": "software",
-      "observed_capabilities": ["http_read", "http_write", "vault_dynamic_creds"],
+      "observed_capabilities": [
+        "http_read",
+        "http_write",
+        "vault_dynamic_creds"
+      ],
       "namespace": "payments-prod",
       "drift_state": {
         "last_evaluated": null,
@@ -45,7 +52,11 @@
       "placed_at": "2025-11-14T09:25:00Z",
       "placed_by": "acm-mcp/cluster-intake",
       "attestation_level": "software",
-      "observed_capabilities": ["http_read", "http_write", "vault_dynamic_creds"],
+      "observed_capabilities": [
+        "http_read",
+        "http_write",
+        "vault_dynamic_creds"
+      ],
       "namespace": "payments-prod",
       "drift_state": {
         "last_evaluated": null,
@@ -60,7 +71,6 @@
       }
     }
   ],
-
   "execution_environments": [
     {
       "@type": "ExecutionEnvironment",
@@ -68,8 +78,11 @@
       "provider_type": "openshift",
       "provider_ref": "acm-cluster-sp:prod-east-ocp-01",
       "advertised_capabilities": [
-        "http_read", "http_write", "vault_dynamic_creds",
-        "encryption_at_rest", "mtls_client"
+        "http_read",
+        "http_write",
+        "vault_dynamic_creds",
+        "encryption_at_rest",
+        "mtls_client"
       ],
       "region": "us-east-1",
       "substrate": "x86",
@@ -91,8 +104,11 @@
       "provider_type": "openshift",
       "provider_ref": "acm-cluster-sp:prod-west-ocp-01",
       "advertised_capabilities": [
-        "http_read", "http_write", "vault_dynamic_creds",
-        "encryption_at_rest", "mtls_client"
+        "http_read",
+        "http_write",
+        "vault_dynamic_creds",
+        "encryption_at_rest",
+        "mtls_client"
       ],
       "region": "us-west-2",
       "substrate": "x86",
@@ -109,7 +125,6 @@
       }
     }
   ],
-
   "policies": [
     {
       "@type": "Policy",
@@ -123,12 +138,14 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.placement.label_constraint",
       "provenance": "reconstructed",
-      "rationale": "Reconstructed from observed placement — workload is running on PCI-labelled prod clusters. Treated as declared intent pending human review.",
+      "rationale": "Reconstructed from observed placement \u2014 workload is running on PCI-labelled prod clusters. Treated as declared intent pending human review.",
       "_provenance": {
         "authored_by": "calm-forge/mcp/acm-intake",
         "authored_at": "2026-04-20T00:00:00Z",
         "intake_source": "acm-mcp/cluster-service-provider"
-      }
+      },
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -139,11 +156,13 @@
       "enforcement_mode": "audit",
       "evaluated_by": "calm.drift.threshold_check",
       "provenance": "authored",
-      "rationale": "Brownfield workload — drift detection active from day one of KG onboarding. Any deviation from observed placement surfaces within 4 hours.",
+      "rationale": "Brownfield workload \u2014 drift detection active from day one of KG onboarding. Any deviation from observed placement surfaces within 4 hours.",
       "_provenance": {
         "authored_by": "calm-forge/mcp/acm-intake",
         "authored_at": "2026-04-20T00:00:00Z"
-      }
+      },
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -153,21 +172,52 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.manifest.capability_subset_check",
       "provenance": "authored",
-      "rationale": "If observed_capabilities on any Placement node exceed declared_capabilities on this Workload, it is a schema gap — not a policy violation. Flag immediately for human review and schema update.",
+      "rationale": "If observed_capabilities on any Placement node exceed declared_capabilities on this Workload, it is a schema gap \u2014 not a policy violation. Flag immediately for human review and schema update.",
       "_provenance": {
         "authored_by": "calm-forge/mcp/acm-intake",
         "authored_at": "2026-04-20T00:00:00Z"
-      }
+      },
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
-
   "edges": [
-    { "@type": "placed_on", "from": "workload:legacy-payment-processor:v1", "to": "env:acm:prod-east-ocp-01" },
-    { "@type": "placed_on", "from": "workload:legacy-payment-processor:v1", "to": "env:acm:prod-west-ocp-01" },
-    { "@type": "satisfied_by", "from": "capability:vault_dynamic_creds", "to": "env:acm:prod-east-ocp-01" },
-    { "@type": "satisfied_by", "from": "capability:vault_dynamic_creds", "to": "env:acm:prod-west-ocp-01" },
-    { "@type": "enforced_by", "from": "workload:legacy-payment-processor", "to": "workload:legacy-payment-processor:policy:reconstructed-placement" },
-    { "@type": "enforced_by", "from": "workload:legacy-payment-processor", "to": "workload:legacy-payment-processor:policy:drift-detection" },
-    { "@type": "enforced_by", "from": "workload:legacy-payment-processor", "to": "workload:legacy-payment-processor:policy:capability-gap-alert" }
-  ]
+    {
+      "@type": "placed_on",
+      "from": "workload:legacy-payment-processor:v1",
+      "to": "env:acm:prod-east-ocp-01"
+    },
+    {
+      "@type": "placed_on",
+      "from": "workload:legacy-payment-processor:v1",
+      "to": "env:acm:prod-west-ocp-01"
+    },
+    {
+      "@type": "satisfied_by",
+      "from": "capability:vault_dynamic_creds",
+      "to": "env:acm:prod-east-ocp-01"
+    },
+    {
+      "@type": "satisfied_by",
+      "from": "capability:vault_dynamic_creds",
+      "to": "env:acm:prod-west-ocp-01"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:legacy-payment-processor",
+      "to": "workload:legacy-payment-processor:policy:reconstructed-placement"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:legacy-payment-processor",
+      "to": "workload:legacy-payment-processor:policy:drift-detection"
+    },
+    {
+      "@type": "enforced_by",
+      "from": "workload:legacy-payment-processor",
+      "to": "workload:legacy-payment-processor:policy:capability-gap-alert"
+    }
+  ],
+  "node_class": "authored",
+  "plane": "architecture"
 }

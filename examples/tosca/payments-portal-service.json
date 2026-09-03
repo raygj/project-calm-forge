@@ -1,0 +1,62 @@
+{
+  "tosca_definitions_version": "tosca_simple_yaml_1_3",
+  "metadata": {
+    "template_name": "payments-portal",
+    "template_author": "platform-engineering",
+    "template_version": "1.0.0"
+  },
+  "description": "Payments portal service template (illustrative). Node templates carry the architecture-plane workload URN / edge id each maps to, in metadata.governs; the policies below join to the architecture plane through the templates they target.",
+  "topology_template": {
+    "node_templates": {
+      "web": {
+        "type": "tosca.nodes.WebServer",
+        "metadata": {
+          "governs": "workload:payments-portal:web-tier"
+        }
+      },
+      "api": {
+        "type": "tosca.nodes.WebApplication",
+        "metadata": {
+          "governs": [
+            "workload:payments-portal:api-tier",
+            "kg://edges/v1/2f3c8a0d5e6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d"
+          ]
+        }
+      },
+      "db": {
+        "type": "tosca.nodes.Database",
+        "metadata": {
+          "governs": "workload:payments-portal:db-tier"
+        }
+      }
+    },
+    "policies": [
+      {
+        "web-to-api-availability": {
+          "type": "forge.policies.Availability",
+          "description": "The web->api path must meet the portal's availability SLA.",
+          "properties": {
+            "business_owner": "payments-platform-lead",
+            "justification": "Card authorization requests fail if the web->api hop is unavailable during business hours.",
+            "sla_target": "99.95",
+            "multi_region": true
+          },
+          "targets": ["web", "api"]
+        }
+      },
+      {
+        "db-data-residency": {
+          "type": "forge.policies.Placement",
+          "description": "Cardholder data may not leave the regulated region.",
+          "properties": {
+            "business_owner": "data-protection-office",
+            "justification": "PCI-DSS and local data-residency law require cardholder data to remain in-region.",
+            "residency": "eu-west-1",
+            "allowed_regions": ["eu-west-1", "eu-central-1"]
+          },
+          "targets": ["db"]
+        }
+      }
+    ]
+  }
+}

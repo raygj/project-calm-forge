@@ -214,6 +214,27 @@ def test_bootstrap_bad_fixture_path_captured_as_error(tmp_path):
     assert "concert" in result.sources_run
 
 
+def test_bootstrap_unknown_source_is_reported_not_silently_skipped(tmp_path):
+    """A source name we don't recognise must land in `errors`.
+
+    Previously an unrecognised name (a typo like "aap" for "ansible") was
+    skipped by the membership checks, producing a clean, empty, error-free
+    result — indistinguishable from a real source that simply had no data.
+    """
+    acm_f = _write_fixture(tmp_path, "acm.json", _ACM_FIXTURE)
+    cfg = BootstrapConfig(
+        kg_dir=tmp_path / "kg",
+        sources=["acm", "aap"],  # "aap" is not a valid source name
+        acm_fixture_path=acm_f,
+    )
+    result = kg_bootstrap(cfg)
+
+    assert "aap" in result.errors
+    assert "unknown source" in result.errors["aap"]
+    # The real source still ran — one bad name doesn't abort the batch.
+    assert "acm" in result.sources_run
+
+
 # ---------------------------------------------------------------------------
 # Bootstrap history
 # ---------------------------------------------------------------------------

@@ -1,0 +1,6 @@
+# Weaver generation target for the Python constants the emitters import (MP-52).
+# `weaver registry generate python` reads this file from semconv/templates/registry/python/.
+templates:
+  - template: semconv.py.j2
+    application_mode: single
+    file_name: semconv.py

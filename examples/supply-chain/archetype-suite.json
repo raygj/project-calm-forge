@@ -1,0 +1,30 @@
+{
+  "suite_version": "v1",
+  "description": "Illustrative archetype dependency surfaces for affected-archetype selection (ADR-013 §5). Real personas and their coverage evidence are authored under MP-32; this file declares only which dependency surface each persona exercises, which is what the diff intersects.",
+  "archetypes": [
+    {
+      "name": "java-spring-heavy",
+      "purpose": "Heavyweight Java Spring Boot with complex DB drivers",
+      "dependency_surface": {
+        "ecosystems": ["maven"],
+        "packages": ["spring-core", "postgresql", "log4j-core"]
+      }
+    },
+    {
+      "name": "go-strict-tls",
+      "purpose": "Lightweight service with strict TLS bindings on system OpenSSL",
+      "dependency_surface": {
+        "ecosystems": ["deb"],
+        "packages": ["openssl"]
+      }
+    },
+    {
+      "name": "static-html",
+      "purpose": "Static content served by nginx, no application runtime",
+      "dependency_surface": {
+        "ecosystems": ["apk"],
+        "packages": ["nginx"]
+      }
+    }
+  ]
+}

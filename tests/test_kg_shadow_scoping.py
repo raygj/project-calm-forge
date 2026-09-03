@@ -255,7 +255,7 @@ def test_kuzu_trust_domain_node_roundtrip(tmp_path):
         "@type": "TrustDomain",
         "spiffe_uri_prefix": "spiffe://prod.fsi",
         "commune": "forge",
-        "peer_trust_domains": ["trust_domain:peer.prod"],
+        "peer_trust_domains": ["trust_domain:starfly.prod"],
     })
     rows = backend.query(
         "MATCH (t:TrustDomain {id: $id}) "
@@ -266,14 +266,14 @@ def test_kuzu_trust_domain_node_roundtrip(tmp_path):
     backend.close()
     assert rows[0]["prefix"] == "spiffe://prod.fsi"
     assert rows[0]["commune"] == "forge"
-    assert rows[0]["peers"] == ["trust_domain:peer.prod"]
+    assert rows[0]["peers"] == ["trust_domain:starfly.prod"]
 
 
 def test_kuzu_load_ingests_trust_domains_dir(tmp_path):
     pytest.importorskip("kuzu")
     from calm_forge.kg_kuzu_backend import KuzuBackend
 
-    _write_trust_domain(tmp_path, "prod.fsi", peers=["trust_domain:peer.prod"])
+    _write_trust_domain(tmp_path, "prod.fsi", peers=["trust_domain:starfly.prod"])
     _write_workload(tmp_path, "workload:payments", trust_domains=["trust_domain:prod.fsi"])
 
     backend = KuzuBackend(db_path=tmp_path / "kg.db")

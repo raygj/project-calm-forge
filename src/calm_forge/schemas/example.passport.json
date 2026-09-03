@@ -1,0 +1,60 @@
+{
+  "passport_version": "0.1",
+  "passport_id": "3f8e1c22-9a4b-4d17-bf03-2a1e5c9d7e40",
+  "spiffe_id": "spiffe://prod.fsi/ns/3tier-pci/sa/web-tier",
+  "intent_metadata": {
+    "ticket_id": "SEC-8841",
+    "business_justification": "web-tier calls api-tier over mTLS",
+    "environment": "production",
+    "requested_by": "spiffe://prod.fsi/ns/platform/sa/calm-forge",
+    "compliance_scope": [
+      "PCI-DSS-v4:req-1",
+      "PCI-DSS-v4:req-4"
+    ],
+    "data_classification": "confidential"
+  },
+  "network_binding": {
+    "source_workload": "web-tier",
+    "source_workload_urn": "wl:3tier-pci/web-tier",
+    "source_spiffe_id": "spiffe://prod.fsi/ns/3tier-pci/sa/web-tier",
+    "destination_workload": "api-tier",
+    "destination_workload_urn": "wl:3tier-pci/api-tier",
+    "destination_spiffe_id": "spiffe://prod.fsi/ns/3tier-pci/sa/api-tier",
+    "transport": "tcp",
+    "port": 8443,
+    "app_protocol": [
+      "mTLS"
+    ],
+    "direction": "egress"
+  },
+  "claim": {
+    "claim_type": "grant",
+    "tense": "should-be",
+    "authority_class": "governed-expansion"
+  },
+  "graph_ref": {
+    "edge_id": "kg://edges/v1/83c1619b769aae79d8c6b4ae127a3fafe2e0f47728095b5ed5d278e2cc182364",
+    "source": "declared",
+    "confidence": 1.0,
+    "authored_by": "calm-forge/adr-004-reference-pattern",
+    "authored_at": "2026-04-20T00:00:00Z"
+  },
+  "lifecycle": {
+    "issued_at": 1784246400,
+    "expires_at": 1815782400
+  },
+  "ownership": {
+    "owner": "platform-engineering",
+    "team": "digital-banking-engineering",
+    "cost_center": "CC-7830",
+    "application_name": "3-tier-pci",
+    "sla_tier": "platinum"
+  },
+  "proof": {
+    "issuer": "spiffe://prod.fsi/ns/platform/sa/calm-forge",
+    "algorithm": "ed25519",
+    "canonicalization": "jcs",
+    "public_key_b64": "cII0kIyuhgGk16512fvvfo/THsXmJG2eUyDujC2Uh4U=",
+    "signature_b64": "9A9rsjOHbbfXGw6pTr7EcT8r0uhGIdREqjhpI0FhGHh+fFkuPH3rj59Ebg1X7g0WR8odm1U0bArETBdTbeh4CQ=="
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "archetype_suite": "0.1",
+  "suite_version": "v0",
+  "description": "Empty suite — the mechanical half of MP-32 with no persona content. The design pass authors personas and their coverage evidence; a guessed set would be an unauditable estate claim (ADR-013 §4). Zero personas is a representable state, not an error.",
+  "archetypes": []
+}

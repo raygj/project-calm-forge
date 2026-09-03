@@ -1,0 +1,62 @@
+{
+  "tosca_definitions_version": "tosca_simple_yaml_1_3",
+  "metadata": {
+    "template_name": "payments-portal-policy-types",
+    "template_author": "platform-engineering"
+  },
+  "description": "Business-intent policy types for the payments portal (illustrative). The derived_from chain is deliberate: every policy inherits an accountable owner and a written justification from the root type, and each leaf type adds only the properties that type is about.",
+  "policy_types": {
+    "forge.policies.Root": {
+      "description": "Base business-intent policy. Every derived policy must name an accountable business owner and carry the justification an auditor reads.",
+      "properties": {
+        "business_owner": {
+          "type": "string",
+          "description": "Accountable owner for this business-intent policy.",
+          "required": true
+        },
+        "justification": {
+          "type": "string",
+          "description": "Why this policy exists, in business terms.",
+          "required": true
+        }
+      }
+    },
+    "forge.policies.Availability": {
+      "derived_from": "forge.policies.Root",
+      "description": "Availability / SLA intent for a path or component.",
+      "properties": {
+        "sla_target": {
+          "type": "string",
+          "description": "Target availability, e.g. 99.9.",
+          "default": "99.9"
+        },
+        "max_unavailability_minutes": {
+          "type": "integer",
+          "description": "Budgeted monthly unavailability in minutes.",
+          "default": 43
+        },
+        "multi_region": {
+          "type": "boolean",
+          "description": "Whether the path must survive a region loss.",
+          "default": false
+        }
+      }
+    },
+    "forge.policies.Placement": {
+      "derived_from": "forge.policies.Root",
+      "description": "Data-residency / placement intent for a component.",
+      "properties": {
+        "residency": {
+          "type": "string",
+          "description": "Region the data must remain in.",
+          "required": true
+        },
+        "allowed_regions": {
+          "type": "list",
+          "description": "Regions the component may be placed in.",
+          "required": false
+        }
+      }
+    }
+  }
+}

@@ -36,3 +36,4 @@ examples/*/generated-output/
 # Agent session state — never publish
 .claude/
 .ruff_cache/
+.venv-export/

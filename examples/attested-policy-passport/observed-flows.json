@@ -1,0 +1,20 @@
+{
+  "_note": "Mock observed flows — stand-in for AuthMind / NetFlow. Crawl-stage: these are already identity-resolved (source/destination are workload URNs). Resolving raw IPs to identity is the walk-stage SPIRE/inventory join.",
+  "_scenario": "Against examples/fsi-3tier: web-frontend→api-service is declared AND observed (conformant). analytics→database is observed but never declared (SHADOW). api-service→database is declared but absent here (CONTRACTION CANDIDATE).",
+  "flows": [
+    {
+      "source": "wl:payments-portal/web-frontend",
+      "destination": "wl:payments-portal/api-service",
+      "transport": "tcp",
+      "port": 8443,
+      "_verdict": "conformant — flow matches a current grant"
+    },
+    {
+      "source": "wl:payments-portal/analytics",
+      "destination": "wl:payments-portal/database",
+      "transport": "tcp",
+      "port": 5432,
+      "_verdict": "SHADOW FLOW — traffic the graph never authorized"
+    }
+  ]
+}

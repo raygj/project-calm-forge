@@ -101,10 +101,19 @@ def multi_root_kg_query(
 
     _validate_roots(roots)
 
+    # kg_query expects predicates as "path=value" strings. `where` arrives as a
+    # dict from the federated MCP tool; `list(dict)` would drop every value and
+    # yield bare keys, which kg_query rejects as malformed. Normalise here so
+    # both the dict form and a pre-built list of expressions work.
+    if isinstance(where, dict):
+        predicates = [f"{path}={value}" for path, value in where.items()]
+    else:
+        predicates = list(where or [])
+
     seen: dict[str, dict[str, Any]] = {}
 
     for root in roots:
-        results = kg_query(root, node_type or "Workload", list(where or []), follow)
+        results = kg_query(root, node_type or "Workload", predicates, follow)
         for entry in results:
             node = entry.get("node", {})
             node_id = node.get("@id")

@@ -9,6 +9,11 @@ from typing import Any
 
 _HISTORY_FILE = "_fabric/bootstrap-history.jsonl"
 
+# The intake sources kg_bootstrap knows how to run. A requested source not in
+# this set is a caller mistake (typo, wrong name) — surfaced in `errors` rather
+# than silently skipped, so a fat-fingered source name can't read as success.
+KNOWN_SOURCES = ("acm", "ansible", "concert", "backstage", "terraform")
+
 
 @dataclass
 class BootstrapConfig:
@@ -78,6 +83,14 @@ def kg_bootstrap(config: BootstrapConfig) -> BootstrapResult:
     sources_run: list[str] = []
     nodes_written: dict[str, int] = {}
     errors: dict[str, str] = {}
+
+    # A requested source we don't recognise runs nothing — record it so an empty
+    # result isn't mistaken for "the source had no data".
+    for source in config.sources:
+        if source not in KNOWN_SOURCES:
+            errors[source] = (
+                f"unknown source {source!r} — valid sources: {', '.join(KNOWN_SOURCES)}"
+            )
 
     # Track ACM environments so Ansible can resolve cluster → env @id
     acm_env_nodes: list[dict] = []

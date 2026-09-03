@@ -1,0 +1,290 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://calm-forge/schemas/passport-v0.2.schema.json",
+  "title": "Attested Policy Passport v0.2",
+  "description": "Signed, identity-anchored, multi-plane graph projection of a KG edge. v0.2 introduces graph_refs (plural): per-plane provenance keyed by plane name, superseding the single graph_ref of v0.1. The passport is a condensed graph extract — sufficient to reconstruct a digital twin of the edge's governance context within milliseconds of the artifact landing in Git. The proof is an Ed25519 signature over the JCS-canonicalized body with `proof` excluded. v0.1 consumers remain valid against v0.1 passports; v0.2 is a wire-format version bump, not an in-place mutation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "passport_version",
+    "passport_id",
+    "spiffe_id",
+    "intent_metadata",
+    "network_binding",
+    "claim",
+    "graph_refs",
+    "lifecycle",
+    "proof"
+  ],
+  "properties": {
+    "passport_version": {
+      "type": "string",
+      "const": "0.2",
+      "description": "Passport wire-format version. 0.2 introduces multi-plane graph_refs."
+    },
+    "passport_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "Unique per claim instance (UUID v4)."
+    },
+    "spiffe_id": {
+      "$ref": "#/$defs/spiffe_id",
+      "description": "Source workload identity. SPIFFE is an attestation about the workload, not its identity; the workload URN in network_binding is the stable anchor."
+    },
+    "intent_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["business_justification", "environment", "requested_by"],
+      "properties": {
+        "ticket_id": { "type": "string" },
+        "business_justification": { "type": "string", "minLength": 1 },
+        "environment": {
+          "type": "string",
+          "enum": ["production", "staging", "development", "test"]
+        },
+        "requested_by": { "$ref": "#/$defs/spiffe_id" },
+        "compliance_scope": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Compliance requirements this edge satisfies, e.g. PCI-DSS-v4:req-1. In v0.2 these labels are duplicative convenience only — the authoritative controls linkage is graph_refs.controls. Retained for v0.1 reader compatibility and human scan-ability."
+        },
+        "data_classification": {
+          "type": "string",
+          "enum": ["public", "internal", "confidential", "restricted"]
+        }
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Accountability + routing context. Not part of edge identity or enforcement. All fields optional.",
+      "properties": {
+        "owner": { "type": "string" },
+        "team": { "type": "string" },
+        "cost_center": { "type": "string" },
+        "application_name": { "type": "string" },
+        "sla_tier": { "type": "string" }
+      }
+    },
+    "network_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_workload",
+        "source_workload_urn",
+        "destination_workload",
+        "destination_workload_urn",
+        "transport",
+        "direction"
+      ],
+      "oneOf": [
+        { "required": ["port"] },
+        { "required": ["port_range"] },
+        {
+          "required": ["port_wildcard"],
+          "properties": { "port_wildcard": { "const": true } }
+        },
+        {
+          "required": ["port_unspecified"],
+          "properties": { "port_unspecified": { "const": true } }
+        }
+      ],
+      "properties": {
+        "source_workload": { "type": "string" },
+        "source_workload_urn": { "$ref": "#/$defs/workload_urn" },
+        "source_spiffe_id": { "$ref": "#/$defs/spiffe_id" },
+        "destination_workload": { "type": "string" },
+        "destination_workload_urn": { "$ref": "#/$defs/workload_urn" },
+        "destination_spiffe_id": { "$ref": "#/$defs/spiffe_id" },
+        "transport": {
+          "type": "string",
+          "enum": ["tcp", "udp"],
+          "description": "L4 transport — part of edge identity. NOT the app protocol."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "port_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "type": "integer", "minimum": 0, "maximum": 65535 },
+            "to": { "type": "integer", "minimum": 0, "maximum": 65535 }
+          }
+        },
+        "port_unspecified": {
+          "type": "boolean",
+          "description": "True when no port could be resolved — an admission of ignorance, NOT permission. See APP-000 §6, APP-090."
+        },
+        "port_wildcard": {
+          "type": "boolean",
+          "description": "True when an author deliberately granted every port on this path. See APP-090."
+        },
+        "port_source": {
+          "type": "string",
+          "enum": [
+            "declared-interface",
+            "declared-override",
+            "protocol-default",
+            "inventory",
+            "wildcard",
+            "unresolved"
+          ]
+        },
+        "app_protocol": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Descriptive L7 label(s). Excluded from edge_id so observed L4 flows still match declared claims."
+        },
+        "authentication": { "type": "string" },
+        "direction": {
+          "type": "string",
+          "enum": ["egress", "ingress"]
+        }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_type", "tense", "authority_class"],
+      "properties": {
+        "claim_type": {
+          "type": "string",
+          "enum": ["grant", "revoke"]
+        },
+        "tense": {
+          "type": "string",
+          "enum": ["is", "should-be", "will-be"]
+        },
+        "authority_class": {
+          "type": "string",
+          "enum": ["governed-expansion", "autonomic-contraction"]
+        }
+      }
+    },
+    "graph_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["architecture"],
+      "description": "*** v0.2 CORE CHANGE — per-plane provenance. Each key is a plane (per the multi-plane PAP ADR); each value is either a provenance object or an explicit absence marker. The architecture plane is always required: an edge with no architectural authoring has no business holding a passport. Other planes are required or waivable per the platform's plane policy for the environment class. A plane key that is entirely missing from this object means MISSING — required-but-unauthored — and is a drift finding, distinct from absent-by-policy which is a governed statement. ***",
+      "properties": {
+        "architecture": {
+          "$ref": "#/$defs/plane_ref",
+          "description": "CALM-authored architectural provenance. edge_id here is the canonical L4-tuple hash (APP-000). Always required."
+        },
+        "controls": {
+          "oneOf": [
+            { "$ref": "#/$defs/plane_ref_versioned" },
+            { "$ref": "#/$defs/plane_absent" }
+          ],
+          "description": "OSCAL-authored controls provenance. node_id points at a controls-plane node: kg://oscal/control/<control-id>/<imp-req-id>. Resolving it yields the implemented-requirement, its parameters, and the catalog chain up to the source framework (NIST 800-53, FedRAMP, PCI-DSS). node_version is REQUIRED here (MP-43): OSCAL intake (MP-16) means controls-plane nodes are authored, so STALE_ATTESTATION is computable and a missing digest is a defect, not 'no evidence yet'. This is a per-plane requirement — architecture keeps node_version optional."
+        },
+        "business_intent": {
+          "oneOf": [
+            { "$ref": "#/$defs/plane_ref_versioned" },
+            { "$ref": "#/$defs/plane_absent" }
+          ],
+          "description": "TOSCA-authored business/orchestration provenance. node_id points at a business_intent-plane node: kg://tosca/policy/<template>/<policy>. node_version is REQUIRED here (MP-46): TOSCA intake (MP-21) means business_intent-plane nodes are authored, so — exactly as for controls — STALE_ATTESTATION is computable by content and a missing digest is a defect, not 'no evidence yet'. Per-plane requirement, matching controls; architecture stays on the base plane_ref."
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issued_at", "expires_at"],
+      "properties": {
+        "issued_at": { "type": "integer", "description": "Unix epoch seconds." },
+        "expires_at": {
+          "type": "integer",
+          "description": "Unix epoch seconds. No renewal → edge lapses → rule becomes a contraction candidate."
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer", "algorithm", "canonicalization", "signature_b64"],
+      "properties": {
+        "issuer": { "$ref": "#/$defs/spiffe_id" },
+        "algorithm": {
+          "type": "string",
+          "enum": ["ed25519", "ecdsa-p256"],
+          "description": "Signature scheme. `ed25519` is the crawl/demo default (deterministic). `ecdsa-p256` (ES256) is used when signing with a SPIRE X509-SVID leaf key, which is EC P-256 (APP-080)."
+        },
+        "canonicalization": {
+          "type": "string",
+          "const": "jcs",
+          "description": "RFC 8785 canonical JSON, then sign. Signature covers the body with `proof` excluded — including the full graph_refs object, so per-plane provenance is inside the signed envelope."
+        },
+        "public_key_b64": { "type": "string" },
+        "signature_b64": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "spiffe_id": {
+      "type": "string",
+      "pattern": "^spiffe://[a-z0-9._-]+/.+$"
+    },
+    "workload_urn": {
+      "type": "string",
+      "pattern": "^wl:[^/]+/.+$"
+    },
+    "plane_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "source", "confidence"],
+      "description": "Provenance for one plane. node_id is the stable graph GUID for the governing node in that plane. authored_by is who authored the node (distinct from proof.issuer, who signed the passport) — the two-provenance discipline of v0.1 now holds per-plane.",
+      "properties": {
+        "node_id": {
+          "type": "string",
+          "pattern": "^kg://[a-z_]+/.+$",
+          "description": "Stable plane-node GUID. Architecture plane uses kg://edges/v1/<sha256>; controls plane uses kg://oscal/control/<control-id>/<imp-req-id>; business_intent uses kg://tosca/policy/<id>. Pattern is plane-scheme-open so new planes mint their own scheme without a schema bump."
+        },
+        "node_version": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Content hash of the plane node AS READ at signing time. Makes STALE_ATTESTATION computable by content rather than by clock: the referent has moved iff the node's current hash differs from this one. Immune to skew, backdated authoring, and no-op edits — the edge_id discipline applied one level up. Optional on this base type; tightening to required happens per-plane once that plane has authored graph nodes (see plane_ref_versioned, used by controls as of MP-43 and business_intent as of MP-46). It stays optional where a required flag would force a fabricated digest for a node that does not yet exist — and a fabricated digest makes a stale passport look fresh, the exact failure this field prevents. Architecture remains optional: its ref carries the edge_id itself, already a content hash."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["observed", "declared", "inventory"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "authored_by": { "type": "string" },
+        "authored_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "plane_ref_versioned": {
+      "allOf": [
+        { "$ref": "#/$defs/plane_ref" },
+        { "required": ["node_version"] }
+      ],
+      "description": "A plane_ref whose node_version is mandatory. Used by planes that have authored graph nodes — controls, as of OSCAL intake (MP-16 / MP-43), and business_intent, as of TOSCA intake (MP-21 / MP-46) — so STALE_ATTESTATION is always computable by content for a valid passport. The per-plane boundary is deliberate rather than a schema-wide flip: a plane joins this def only when its intake authors real nodes, because requiring node_version before then would force every emit to fabricate a digest for a node that does not exist, and a fabricated digest makes a stale passport look fresh. Architecture stays on the base plane_ref (its node_id is the edge_id, already a content hash)."
+    },
+    "plane_absent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["absent"],
+      "description": "Explicit absence: this plane is deliberately not authored for this edge, waived by platform plane policy. 'Not here on purpose' — a governed statement, distinct from a missing key which means required-but-unauthored (a drift finding).",
+      "properties": {
+        "absent": {
+          "type": "string",
+          "const": "policy"
+        },
+        "waived_by": {
+          "type": "string",
+          "description": "The platform plane-policy rule that waives this plane for this environment class, e.g. platform-policy/plane-requirements-v1#dev-waives-business-intent."
+        }
+      }
+    }
+  }
+}

@@ -8,7 +8,6 @@ invocation). Covers:
 """
 
 import json
-import re
 import urllib.error
 from pathlib import Path
 from unittest.mock import patch
@@ -37,16 +36,6 @@ FULL_ARTIFACTS = [
     "ansible/inventory.yml",
     "ansible/eda-rulebook.yml",
 ]
-
-
-def _strip_timestamp(text):
-    """Remove GENERATED timestamp lines so comparisons are stable."""
-    return re.sub(
-        r"^# GENERATED:    .*$",
-        "# GENERATED:    (timestamp varies)",
-        text,
-        flags=re.MULTILINE,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +104,7 @@ def test_generate_components_matches_baseline(example, tmp_path):
         "--catalog", str(ex / "catalog.json"),
         "--output-dir", str(tmp_path),
     ])
-    actual = _strip_timestamp((tmp_path / "components.tfstack.hcl").read_text())
+    actual = (tmp_path / "components.tfstack.hcl").read_text()
     expected = (ex / "expected-output" / "components.tfstack.hcl").read_text()
     assert actual == expected, f"components.tfstack.hcl mismatch for {example}"
 
@@ -133,10 +122,8 @@ def test_generate_full_artifacts_match_baselines(example, tmp_path):
         "--full",
     ])
     for artifact in FULL_ARTIFACTS:
-        actual = _strip_timestamp((tmp_path / artifact).read_text())
-        expected = _strip_timestamp(
-            (ex / "expected-output" / artifact).read_text()
-        )
+        actual = (tmp_path / artifact).read_text()
+        expected = (ex / "expected-output" / artifact).read_text()
         assert actual == expected, f"{artifact} mismatch for {example}"
 
 

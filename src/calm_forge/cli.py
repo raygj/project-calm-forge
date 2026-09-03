@@ -2,11 +2,17 @@
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import click
 
 from .generator import generate_stack, validate_architecture
+
+_DEFAULT_ISSUER = "spiffe://calm-forge.local/ns/platform/sa/calm-forge"
+_DEFAULT_TTL_DAYS = 365
+
+from .kg_plane import PLANES as _PLANES  # noqa: E402  (option choices need it at import)
 
 
 @click.group()
@@ -30,7 +36,33 @@ def cli():
               help="Include import blocks for brownfield resource adoption (use with imported CALM)")
 @click.option("--validate", "validate_hcl", is_flag=True, default=False,
               help="Validate generated HCL files for syntax correctness")
-def generate(calm, decorator, catalog, output_dir, full, include_imports, validate_hcl):
+@click.option("--passport", "emit_passport", is_flag=True, default=False,
+              help="Also emit a signed Attested Policy Passport per relationship edge")
+@click.option("--trust-domain", default="calm-forge.local",
+              help="SPIFFE trust domain for passport identities (should-be)")
+@click.option("--issuer", default=_DEFAULT_ISSUER,
+              help="SPIFFE id of the passport issuer (signer)")
+@click.option("--key", "key_path", default=None, type=click.Path(),
+              help="Ed25519 signing key (PEM). Generated + saved here if absent.")
+@click.option("--environment", default="production",
+              type=click.Choice(["production", "staging", "development", "test"]),
+              help="Environment recorded in passport intent metadata")
+@click.option("--fortinet", "emit_fortinet", is_flag=True, default=False,
+              help="Also emit Fortinet candidate config (HCL + FortiOS CLI) per edge")
+@click.option("--policy-framework", default="sentinel",
+              type=click.Choice(["sentinel", "tfpolicy", "all"]),
+              help="Policy language for the --full set: sentinel (default), tfpolicy "
+                   "[BETA], or all. OPA is emitted via validate-intent, not here.")
+@click.option("--passport-version", default="0.1", type=click.Choice(["0.1", "0.2"]),
+              help="Passport wire format for --passport. 0.2 carries per-plane "
+                   "graph_refs; the architecture edge_id is identical either way.")
+@click.option("--sign-provenance", is_flag=True, default=False,
+              help="Also write a signed DSSE envelope beside the SLSA provenance, using "
+                   "--key. Without it the provenance is a truthful build record but not "
+                   "tamper-evident, so downstream must not treat it as an attestation.")
+def generate(calm, decorator, catalog, output_dir, full, include_imports, validate_hcl,
+             emit_passport, trust_domain, issuer, key_path, environment, emit_fortinet,
+             policy_framework, passport_version, sign_provenance):
     """Generate Terraform Stack HCL from CALM architecture + decorator + catalog.
 
     Use --full to also generate Vault policies/PKI, Sentinel policies,
@@ -42,10 +74,13 @@ def generate(calm, decorator, catalog, output_dir, full, include_imports, valida
 
     Use --validate to run a lightweight HCL syntax check on generated files.
     """
+    provenance_key = _load_or_create_key(key_path)[0] if sign_provenance else None
     try:
         files = generate_stack(
             calm, decorator, catalog, output_dir,
             full=full, include_imports=include_imports,
+            policy_framework=policy_framework,
+            signing_key=provenance_key,
         )
     except json.JSONDecodeError as exc:
         click.secho(f"Invalid JSON in {exc.doc}: {exc.msg}", fg="red", err=True)
@@ -68,12 +103,43 @@ def generate(calm, decorator, catalog, output_dir, full, include_imports, valida
     click.echo(f"Catalog: {Path(catalog).name}")
     click.echo(f"Decorator: {Path(decorator).name}")
 
+    from .provenance import PROVENANCE_ENVELOPE_FILENAME, PROVENANCE_FILENAME
+    click.echo(f"\nSLSA provenance: {Path(output_dir) / PROVENANCE_FILENAME}")
+    if sign_provenance:
+        click.secho(
+            f"  signed (DSSE): {Path(output_dir) / PROVENANCE_ENVELOPE_FILENAME}", fg="green"
+        )
+    else:
+        click.secho(
+            "  unsigned — a build record, not an attestation (use --sign-provenance)",
+            fg="yellow",
+        )
+
+    if emit_passport:
+        emitted = _emit_passports_from_calm(
+            calm, Path(output_dir) / "passports", trust_domain=trust_domain, issuer=issuer,
+            key_path=key_path, environment=environment, passport_version=passport_version,
+        )
+        click.secho(f"\nEmitted {len(emitted)} signed passport(s):", fg="green")
+        for path in emitted:
+            click.echo(f"  {path}")
+
+    if emit_fortinet:
+        fortinet_paths = _emit_fortinet_from_calm(calm, output_dir)
+        click.secho(f"\nEmitted Fortinet candidate config ({len(fortinet_paths)} files):", fg="green")
+        for path in fortinet_paths:
+            click.echo(f"  {path}")
+
     if validate_hcl:
         from .hcl_validator import validate_hcl_syntax
 
-        hcl_files = [name for name in files if name.endswith(".hcl")]
+        to_validate = [name for name in files if name.endswith(".hcl")]
+        if emit_fortinet:
+            to_validate.append("fortinet/fortinet.tf")  # APP-062: Fortinet HCL through the same gate
+        # tfpolicy .policy.hcl / .policytest.hcl are HCL — gate them too. They're already
+        # in `files` (they end in .hcl), so no explicit append needed.
         all_errors = []
-        for name in hcl_files:
+        for name in to_validate:
             content = (Path(output_dir) / name).read_text()
             errors = validate_hcl_syntax(content)
             for err in errors:
@@ -85,7 +151,7 @@ def generate(calm, decorator, catalog, output_dir, full, include_imports, valida
             sys.exit(1)
         else:
             click.secho(
-                f"HCL validation passed: {len(hcl_files)} file{'s' if len(hcl_files) != 1 else ''} OK",
+                f"HCL validation passed: {len(to_validate)} file{'s' if len(to_validate) != 1 else ''} OK",
                 fg="green",
             )
 
@@ -411,6 +477,17 @@ def serve(host, port, no_auth, reload, opa_bundle, ssl_certfile, ssl_keyfile, ss
         click.secho("--ssl-certfile and --ssl-keyfile must be given together", fg="red", err=True)
         sys.exit(1)
 
+    # Asking for client-cert verification without a server cert to carry it is
+    # unsatisfiable: uvicorn would bind cleartext and the operator would believe
+    # mTLS was on. Refuse rather than downgrade in silence (ADR-0024).
+    if ssl_ca_certs and "ssl_ca_certs" not in ssl_kwargs:
+        click.secho(
+            "Error: --ssl-ca-certs requires --ssl-certfile and --ssl-keyfile. "
+            "Client certificate verification cannot be enabled on a cleartext listener.",
+            fg="red", err=True,
+        )
+        sys.exit(1)
+
     if coherence_auth_mode == "spiffe" and "ssl_ca_certs" not in ssl_kwargs:
         click.secho(
             "Error: CALM_FORGE_COHERENCE_AUTH=spiffe requires mTLS. "
@@ -644,6 +721,453 @@ def intake_concert_cmd(fixture, output_dir, namespace):
             )
 
 
+@cli.command("intake-oscal")
+@click.option("--component-definition", required=True, type=click.Path(exists=True),
+              help="OSCAL Component Definition JSON")
+@click.option("--catalog", default=None, type=click.Path(exists=True),
+              help="OSCAL Catalog JSON — supplies each control's declared parameter defaults")
+@click.option("--profile", default=None, type=click.Path(exists=True),
+              help="OSCAL Profile JSON — baseline tailoring via modify.set-parameters")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write controls-plane nodes")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def intake_oscal_cmd(component_definition, catalog, profile, output_dir, namespace):
+    """Compile an OSCAL Component Definition into controls-plane KG nodes.
+
+    One ControlImplementation node per implemented requirement, written to
+    <output_dir>/controls/ and tagged plane=controls. Parameters resolve through
+    catalog -> profile -> control-implementation -> implemented-requirement, and each
+    resolved value records which layer set it.
+
+    \b
+    Scope: component-definition plus catalog/profile parameter resolution only.
+    Any other OSCAL model is refused by name rather than read to an empty result.
+
+    Exits 1 when a declared parameter is left unresolved. The nodes are still written --
+    the catalog is what it is -- but a policy generated from an unresolved parameter has
+    a hole in it, and that must not pass a pipeline silently.
+    """
+    from pathlib import Path as _Path
+
+    from .intake_oscal import intake_oscal_from_file, write_controls_nodes
+    from .kg_namespace import resolve_kg_dir
+
+    result = intake_oscal_from_file(
+        component_definition, catalog_path=catalog, profile_path=profile
+    )
+    nodes = result["controls_nodes"]
+    paths = write_controls_nodes(nodes, resolve_kg_dir(_Path(output_dir), namespace))
+    click.secho(f"Wrote {len(paths)} ControlImplementation node(s) to the controls plane:",
+                fg="green")
+    for node, path in zip(nodes, paths):
+        click.echo(f"  {node['control_id']:<12} {path}")
+        for target in node["governs"]:
+            click.echo(f"      governs -> {target}")
+
+    edges = result["edges"]
+    if edges:
+        click.echo(f"\n{len(edges)} governs edge(s) — controls plane to the objects "
+                   f"they constrain.")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} gap(s):", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
+@cli.command("intake-tosca")
+@click.option("--service-template", "service_template_path", required=True,
+              type=click.Path(exists=True),
+              help="TOSCA Service Template JSON (topology_template with policies)")
+@click.option("--definitions", default=None, type=click.Path(exists=True),
+              help="TOSCA type-definitions JSON — supplies policy_type property defaults "
+                   "and the derived_from chain")
+@click.option("--template-name", default=None,
+              help="Service template name used in node GUIDs (defaults to "
+                   "metadata.template_name)")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write business_intent-plane nodes")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def intake_tosca_cmd(service_template_path, definitions, template_name, output_dir, namespace):
+    """Compile a TOSCA Service Template into business_intent-plane KG nodes.
+
+    One ToscaPolicy node per policy, written to <output_dir>/business_intent/ and tagged
+    plane=business_intent. Properties resolve through policy-type-default -> policy, each
+    resolved value recording which layer set it, and each policy's governs set joins to
+    the architecture plane through the workload URNs / edge ids its targets map to.
+
+    \b
+    Scope: topology_template policies plus policy_type property resolution only. A TOSCA
+    type-definitions library (node_types/policy_types with no topology_template) is refused
+    by name -- pass it via --definitions.
+
+    Exits 1 when a declared required property is left unresolved. The nodes are still
+    written -- the template is what it is -- but a policy generated from an unresolved
+    property has a hole in it, and that must not pass a pipeline silently.
+    """
+    from pathlib import Path as _Path
+
+    from .intake_tosca import intake_tosca_from_file, write_business_intent_nodes
+    from .kg_namespace import resolve_kg_dir
+
+    result = intake_tosca_from_file(
+        service_template_path, definitions_path=definitions, template_name=template_name
+    )
+    nodes = result["business_intent_nodes"]
+    paths = write_business_intent_nodes(nodes, resolve_kg_dir(_Path(output_dir), namespace))
+    click.secho(f"Wrote {len(paths)} ToscaPolicy node(s) to the business_intent plane:",
+                fg="green")
+    for node, path in zip(nodes, paths):
+        click.echo(f"  {node['policy_name']:<28} {path}")
+        for target in node["governs"]:
+            click.echo(f"      governs -> {target}")
+
+    edges = result["edges"]
+    if edges:
+        click.echo(f"\n{len(edges)} governs edge(s) — business_intent plane to the "
+                   f"objects they constrain.")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} gap(s):", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
+@cli.command("intake-anchors")
+@click.option("--registry", required=True, type=click.Path(exists=True),
+              help="Application registry export (JSON)")
+@click.option("--mapping", default=None, type=click.Path(exists=True),
+              help="Field mapping aliasing this deployment's export onto the canonical "
+                   "contract. Data, not code -- no per-deployment fork of the intake")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write anchor reference nodes")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def intake_anchors_cmd(registry, mapping, output_dir, namespace):
+    """Compile an application registry into AccountabilityAnchor reference nodes.
+
+    One anchor per application, written to <output_dir>/reference/anchors/ with
+    node_class=reference and no plane -- the registry names things, it authors no
+    intent (ADR-012 §1).
+
+    \b
+    Three rules fail closed, and a violating entry yields a gap and NO node:
+      * accountable_for binds exactly one human (ADR-010 §6)
+      * identity_class is declared, never inferred from the shape of an id
+      * no personal data enters a node -- resolution to a person is graph-side
+        and access-controlled (ADR-010 §2)
+
+    Exits 1 when any entry is refused. A half-valid anchor is indistinguishable from a
+    valid one at every downstream reader, so there is nowhere later to catch it.
+    """
+    from pathlib import Path as _Path
+
+    from .intake_anchor import intake_anchors_from_file, write_anchor_nodes
+    from .kg_namespace import resolve_kg_dir
+
+    result = intake_anchors_from_file(registry, mapping_path=mapping)
+    nodes = result["reference_nodes"]
+    paths = write_anchor_nodes(nodes, resolve_kg_dir(_Path(output_dir), namespace))
+    click.secho(f"Wrote {len(paths)} AccountabilityAnchor node(s) to the reference graph:",
+                fg="green")
+    for node, path in zip(nodes, paths):
+        click.echo(f"  {node['anchor_id']:<12} {path}")
+        click.echo(f"      accountable_for -> {node['accountable_for']['id']}")
+        if node["associated_with"]:
+            click.echo(f"      associated_with -> {len(node['associated_with'])} identity(ies)")
+
+    edges = result["edges"]
+    if edges:
+        click.echo(f"\n{len(edges)} identity edge(s) -- every one points *up* at an "
+                   f"anchor (ADR-010 §6b).")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} refused entry/entries:", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
+@cli.command("intake-openlineage")
+@click.option("--events", required=True, type=click.Path(exists=True),
+              help="OpenLineage event stream: a JSON array or newline-delimited JSON")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write data_management-plane nodes")
+@click.option("--position", default=None,
+              help="The transport's resumable offset (broker offset, file cursor). "
+                   "Recorded verbatim in the watermark and never invented")
+@click.option("--retraction-window", default=None, type=int,
+              help="Report edges not seen in their job's last N runs. Counted in RUNS, "
+                   "never in time -- a clock here would make the same estate answer "
+                   "differently depending on when it was asked")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def intake_openlineage_cmd(events, output_dir, position, retraction_window, namespace):
+    """Reduce an OpenLineage event stream into data_management-plane KG nodes.
+
+    A run is never a node. Runs collapse onto distinct (job, dataset, direction)
+    edges, so millions of runs give a handful of edges and at-least-once
+    redelivery is idempotent.
+
+    \b
+    Only the schema, ownership and lifecycle dataset facets enter node content.
+    Everything else -- row counts, durations, run ids, event timestamps -- is
+    DROPPED rather than stored-and-excluded: a field that must be scrubbed before
+    comparison is the MP-44 trap rebuilt one layer up.
+
+    \b
+    --retraction-window REPORTS candidates; it never retracts. Retraction is an
+    attested act that fails closed (ADR-011 §6c) and runs through the API with an
+    attester supplied, because an unrecorded retraction is a governance mutation
+    with no author.
+    """
+    from pathlib import Path as _Path
+
+    from .intake_openlineage import (
+        intake_openlineage_from_file,
+        retraction_candidates,
+        write_data_management_nodes,
+    )
+    from .kg_namespace import resolve_kg_dir
+
+    result = intake_openlineage_from_file(events, position=position)
+    paths = write_data_management_nodes(result, resolve_kg_dir(_Path(output_dir), namespace))
+
+    click.secho(f"Reduced {result['watermark']['events_read']} terminal run event(s) to "
+                f"{len(result['job_nodes'])} job(s) and {len(result['dataset_nodes'])} "
+                f"dataset(s):", fg="green")
+    for node, path in zip([*result["job_nodes"], *result["dataset_nodes"]], paths):
+        click.echo(f"  {node['@type']:<8} {node['@id']}")
+    click.echo(f"\n{len(result['edges'])} lineage edge(s):")
+    for edge in result["edges"]:
+        click.echo(f"  {edge['from']} --{edge['@type']}--> {edge['to']}")
+
+    mark = result["watermark"]
+    click.echo(f"\nWatermark: {mark['events_read']} event(s), position="
+               f"{mark['position']!r}, digest {mark['reduced_digest'][:23]}...")
+    if mark["position"] is None:
+        click.secho("  No transport position supplied -- recorded as absent rather than "
+                    "invented. This graph is not resumable from its own watermark.",
+                    fg="yellow")
+
+    if retraction_window is not None:
+        candidates = retraction_candidates(
+            result["observations"], result["run_counts"], window=retraction_window)
+        if candidates:
+            click.secho(f"\n{len(candidates)} retraction candidate(s) -- reported, NOT "
+                        f"retracted:", fg="yellow", bold=True)
+            for candidate in candidates:
+                click.secho(f"  {candidate['edge_key']}", fg="yellow")
+                click.secho(f"      unseen for {candidate['runs_since_last_seen']} of "
+                            f"{candidate['job_run_count']} run(s), window "
+                            f"{candidate['window']}", fg="yellow")
+        else:
+            click.echo(f"\nNo edge unseen for {retraction_window} run(s).")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} gap(s):", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
+@cli.command("intake-odcs")
+@click.option("--contract", required=True, type=click.Path(exists=True),
+              help="ODCS data contract (YAML or JSON)")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write declared-side data_management nodes")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def intake_odcs_cmd(contract, output_dir, namespace):
+    """Compile an ODCS data contract into declared-side data_management nodes.
+
+    intake-openlineage reads what happened; this reads what was promised. Together
+    they are the plane's drift pair (ADR-011 §7b).
+
+    \b
+    The observed-side join is DERIVED on read, never stored: a stored derivation would
+    enter the node's content digest, so refining the join rule later would re-digest
+    every contract and present our code change as their intent changing.
+
+    \b
+    A contract whose datasets cannot be joined is reported, never guessed at. A
+    fabricated correspondence would make an uncontracted dataset look contracted,
+    which is the DATASET_OBSERVED_NOT_CONTRACTED finding inverted.
+
+    Exits 1 when any gap is reported.
+    """
+    from pathlib import Path as _Path
+
+    from .intake_odcs import (
+        intake_odcs_from_file,
+        observed_dataset_ids,
+        write_contract_nodes,
+    )
+    from .kg_namespace import resolve_kg_dir
+
+    result = intake_odcs_from_file(contract)
+    paths = write_contract_nodes(result, resolve_kg_dir(_Path(output_dir), namespace))
+
+    node = result["contract_nodes"][0]
+    click.secho(f"Wrote {len(paths)} declared-side node(s) to the data_management plane:",
+                fg="green")
+    click.echo(f"  {node['@type']:<18} {node['@id']}")
+    for dataset in result["contracted_dataset_nodes"]:
+        click.echo(f"  {dataset['@type']:<18} {dataset['@id']}")
+        for observed in observed_dataset_ids(dataset):
+            click.echo(f"      joins observed -> {observed}")
+
+    edges = result["edges"]
+    if edges:
+        click.echo(f"\n{len(edges)} edge(s): `declares` within the plane, "
+                   f"`associated_with` to the identities the contract names.")
+        click.echo("  Accountability is NOT asserted here -- the application registry "
+                   "is the system of record for that (ADR-010 §1).")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} gap(s):", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
+@cli.command("intake-requirements")
+@click.option("--document", required=True, type=click.Path(exists=True),
+              help="Requirements document (YAML or JSON)")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write requirements-plane nodes")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def intake_requirements_cmd(document, output_dir, namespace):
+    """Compile generative intent into requirements-plane KG nodes.
+
+    Actors, requirements with embedded Gherkin acceptance, and target states,
+    written to <output_dir>/requirements/. This is the one plane whose schema Forge
+    mints rather than adopts (ADR-015 §6), so the document's requirements_schema
+    version is the reader-dispatch key -- an unknown version RAISES.
+
+    \b
+    Three rules fail closed:
+      * realized_by is never authored -- it derives on read from inbound realizes
+        edges. Stored, it would enter the node's digest, so generating an artifact
+        would mutate the intent it was generated from.
+      * a ratified requirement needs acceptance that projects into a test skeleton.
+        A block that cannot project was never executable.
+      * workflow fields are refused. Forge is not a requirements-management tool.
+
+    An internal system or agent actor must carry an anchor_ref, and it yields an
+    associated_with edge only -- autonomy lives in the execution; accountability
+    never leaves the human (ADR-010 §6a).
+    """
+    from pathlib import Path as _Path
+
+    from .intake_requirements import (
+        acceptance_skeletons,
+        intake_requirements_from_file,
+        realized_by,
+        write_requirements_nodes,
+    )
+    from .kg_namespace import resolve_kg_dir
+
+    result = intake_requirements_from_file(document)
+    paths = write_requirements_nodes(result, resolve_kg_dir(_Path(output_dir), namespace))
+    edges = result["edges"]
+
+    click.secho(f"Wrote {len(paths)} node(s) to the requirements plane:", fg="green")
+    for node in result["actor_nodes"]:
+        anchor = node.get("anchor_ref")
+        suffix = f"  associated_with -> {anchor}" if anchor else ""
+        click.echo(f"  {node['kind']:<7} {node['actor_id']}{suffix}")
+    for node in result["requirement_nodes"]:
+        click.echo(f"  {node['status']:<11} {node['requirement_id']}")
+        for skeleton in acceptance_skeletons(node):
+            click.echo(f"      projects -> {skeleton}")
+        for target in realized_by(node, edges):
+            click.echo(f"      realizes -> {target}")
+    for node in result["target_state_nodes"]:
+        click.echo(f"  target      {node['target_state_id']}")
+        for key, value in node["assertions"].items():
+            click.echo(f"      {key} = {value}")
+        for target in realized_by(node, edges):
+            click.echo(f"      realizes -> {target}")
+
+    if edges:
+        click.echo(f"\n{len(edges)} edge(s). `realizes` points forward through generation; "
+                   f"`associated_with` never asserts accountability.")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} gap(s):", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
+@cli.command("intake-archetypes")
+@click.option("--suite", required=True, type=click.Path(exists=True),
+              help="Archetype suite document (YAML or JSON)")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write supply_chain-plane suite + archetype nodes")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def intake_archetypes_cmd(suite, output_dir, namespace):
+    """Compile an archetype suite into supply_chain-plane KG nodes (MP-32).
+
+    Mechanical half only: node shape, coverage-evidence schema, content digest.
+    A suite with zero personas is valid. A persona without coverage evidence is
+    a gap and is not written — a guessed name must not land with a real digest.
+
+    The suite digest is computed on read from content (no clock) and printed;
+    it is never stored on the node.
+    """
+    from pathlib import Path as _Path
+
+    from .intake_archetypes import (
+        intake_archetypes_from_file,
+        persona_count,
+        represented_classes,
+        suite_digest,
+        write_archetype_nodes,
+    )
+    from .kg_namespace import resolve_kg_dir
+
+    result = intake_archetypes_from_file(suite)
+    paths = write_archetype_nodes(result, resolve_kg_dir(_Path(output_dir), namespace))
+    suite_node = result["suite_nodes"][0]
+    archetypes = result["archetype_nodes"]
+    digest = suite_digest(suite_node["suite_version"], archetypes)
+
+    click.secho(
+        f"Wrote {len(paths)} supply_chain node(s) — suite {suite_node['suite_version']}:",
+        fg="green",
+    )
+    click.echo(f"  {suite_node['@type']:<16} {suite_node['@id']}")
+    click.echo(f"  digest           sha256:{digest}")
+    click.echo(f"  personas         {persona_count(archetypes)} (derived, not stored)")
+    classes = represented_classes(archetypes)
+    if classes:
+        click.echo(f"  covers           {', '.join(classes)} (derived)")
+    for node in archetypes:
+        n_classes = len((node.get("coverage") or {}).get("workload_classes") or [])
+        click.echo(f"  {node['@type']:<16} {node['name']}  ({n_classes} class(es) evidenced)")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} gap(s):", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
 @cli.command("interview")
 @click.option("--spec", "spec_file", default=None, type=click.Path(exists=True),
               help="JSON file containing workload spec (non-interactive mode)")
@@ -748,6 +1272,465 @@ def interview_cmd(spec_file, output_dir, as_json, escalation_id, kg_dir):
     if written_path:
         click.echo(f"  Written to:            {written_path}")
     click.echo()
+
+
+def _load_or_create_key(key_path):
+    """Load an Ed25519 key from PEM, generating + saving one if absent."""
+    from .passport import generate_keypair, load_private_key, save_private_key
+
+    if key_path and Path(key_path).exists():
+        return load_private_key(key_path), False
+    key = generate_keypair()
+    if key_path:
+        Path(key_path).parent.mkdir(parents=True, exist_ok=True)
+        save_private_key(key, key_path)
+        return key, True
+    return key, True
+
+
+def _join_inventory(edges, inventory):
+    """Fill ports the intent left unresolved from an inventory file (APP-093).
+
+    Reports what it did rather than doing it silently: a port learned from the
+    fabric is weaker evidence than one declared in intent, and the operator
+    should still go declare it.
+    """
+    if not inventory:
+        return edges
+    from .passport_seams import load_inventory, resolve_ports_from_inventory
+
+    before = sum(1 for e in edges if e.get("port_unspecified"))
+    edges, unresolved = resolve_ports_from_inventory(edges, load_inventory(inventory))
+    filled = before - len(unresolved)
+    if filled:
+        click.secho(f"Inventory resolved {filled} undeclared port(s) "
+                    f"— marked port_source=inventory, still worth declaring.", fg="cyan")
+    for edge in unresolved:
+        ambiguous = edge.get("port_ambiguous")
+        why = (f"listens on {ambiguous} — ambiguous" if ambiguous
+               else "not in inventory either")
+        click.secho(f"  ! no port for {edge['source_workload_urn']} → "
+                    f"{edge['destination_workload_urn']}: {why}", fg="yellow")
+    return edges
+
+
+def _resolve_signer(*, key_path, issuer, spire, spire_socket, trust_domain):
+    """Return ``(signing_key, issuer)`` for emission.
+
+    With ``--spire``, identity comes from the live SPIRE Workload API: the workload signs with
+    its own SVID key (EC P-256 → ``ecdsa-p256``) and the issuer is the SVID's SPIFFE id — real
+    attestation, not a should-be. Otherwise a local Ed25519 key + the given issuer (crawl).
+    """
+    if spire:
+        from .passport_seams import SpireWorkloadApiProvider
+        from .spire_client import DEFAULT_SOCKET, SpiffeSocketClient
+
+        client = SpiffeSocketClient(spire_socket or DEFAULT_SOCKET)
+        provider = SpireWorkloadApiProvider(client, trust_domain=trust_domain)
+        return provider.signing_key(), provider.spiffe_id()
+    key, _ = _load_or_create_key(key_path)
+    return key, issuer
+
+
+def _emit_passports_from_calm(calm, dest_dir, *, trust_domain, issuer, key_path,
+                              environment, ttl_days=_DEFAULT_TTL_DAYS, inventory=None,
+                              signing_key=None, passport_version=None):
+    """Emit one signed passport per CALM relationship edge into ``dest_dir``.
+
+    ``passport_version`` selects the wire format; ``None`` keeps the emitter default
+    (v0.1). v0.2 emits only the architecture plane — the CLI has no plane intake to
+    populate controls or business_intent from, and inventing an absence marker for a
+    plane we simply have not read would launder ignorance into a governed statement
+    (ADR-005 §5).
+    """
+    from .passport import (
+        build_passport,
+        context_from_calm,
+        edges_from_calm_architecture,
+        write_passport,
+    )
+
+    architecture = json.loads(Path(calm).read_text())
+    edges = edges_from_calm_architecture(architecture, trust_domain=trust_domain)
+    edges = _join_inventory(edges, inventory)
+    ctx = context_from_calm(architecture)
+    key = signing_key if signing_key is not None else _load_or_create_key(key_path)[0]
+
+    issued_at = int(time.time())
+    expires_at = issued_at + ttl_days * 86400
+    out = Path(dest_dir)
+
+    paths = []
+    for edge in edges:
+        justification = edge.get("description") or (
+            f"{edge['source_workload']} → {edge['destination_workload']}"
+            f" over {(edge.get('app_protocol') or ['tcp'])[0]}"
+        )
+        intent = {
+            "business_justification": justification,
+            "environment": environment,
+            "requested_by": issuer,
+            **ctx["intent"],
+        }
+        passport = build_passport(
+            edge, intent, key, issuer,
+            issued_at=issued_at, expires_at=expires_at, ownership=ctx["ownership"],
+            **({"version": passport_version} if passport_version else {}),
+        )
+        paths.append(write_passport(passport, out))
+    return paths
+
+
+def _emit_fortinet_from_calm(calm, output_dir):
+    """Emit Fortinet candidate config (HCL + CLI) into <output_dir>/fortinet/."""
+    from .fortinet_writer import write_fortinet
+    from .passport import context_from_calm, edges_from_calm_architecture
+
+    architecture = json.loads(Path(calm).read_text())
+    edges = edges_from_calm_architecture(architecture, trust_domain="calm-forge.local")
+    compliance = context_from_calm(architecture)["intent"].get("compliance_scope")
+    out = Path(output_dir) / "fortinet"
+    out.mkdir(parents=True, exist_ok=True)
+
+    paths = []
+    for name, content in write_fortinet(edges, compliance=compliance).items():
+        path = out / name
+        path.write_text(content)
+        paths.append(path)
+    return paths
+
+
+@cli.group("passport")
+def passport_group():
+    """Emit and verify Attested Policy Passports — signed projections of KG edges."""
+
+
+@passport_group.command("emit")
+@click.option("--calm", type=click.Path(exists=True), help="CALM instantiation JSON")
+@click.option("--kg", "kg_file", type=click.Path(exists=True), help="KG Workload JSON")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="Directory to write <edge-hash>.passport.json files")
+@click.option("--trust-domain", default="calm-forge.local",
+              help="SPIFFE trust domain for passport identities (should-be)")
+@click.option("--issuer", default=_DEFAULT_ISSUER, help="SPIFFE id of the issuer (signer)")
+@click.option("--key", "key_path", default=None, type=click.Path(),
+              help="Ed25519 signing key (PEM). Generated + saved here if absent.")
+@click.option("--environment", default="production",
+              type=click.Choice(["production", "staging", "development", "test"]))
+@click.option("--ttl-days", default=_DEFAULT_TTL_DAYS, type=int, help="Passport lifetime in days")
+@click.option("--inventory", default=None, type=click.Path(exists=True),
+              help="Inventory listener table (JSON) — fills ports the intent leaves "
+                   "undeclared. Never overrides a declared port; fills are stamped "
+                   "port_source=inventory.")
+@click.option("--spire", is_flag=True, default=False,
+              help="Sign with a live SPIRE X509-SVID (Workload API) instead of a local key. "
+                   "The issuer becomes the SVID's SPIFFE id — real attestation (APP-080).")
+@click.option("--spire-socket", default=None,
+              help="SPIRE agent Workload API socket (default: the SPIFFE CSI mount).")
+@click.option("--passport-version", default="0.1", type=click.Choice(["0.1", "0.2"]),
+              help="Wire format. 0.2 carries per-plane graph_refs; the architecture "
+                   "edge_id is byte-identical either way, so joins survive the bump.")
+def passport_emit_cmd(calm, kg_file, output_dir, trust_domain, issuer, key_path,
+                      environment, ttl_days, inventory, spire, spire_socket,
+                      passport_version):
+    """Emit a signed passport per relationship edge from a CALM or KG source.
+
+    graph_ref.edge_id is derived from the L4 identity tuple, so a claim and an
+    observed flow of the same edge hash identically. With --spire, the signing
+    identity is a live SPIRE SVID; otherwise SPIFFE ids are *should-be*.
+    """
+    if bool(calm) == bool(kg_file):
+        raise click.UsageError("Provide exactly one of --calm or --kg.")
+
+    from .passport import (
+        build_passport,
+        edges_from_kg_workload,
+        ownership_from_kg,
+        write_passport,
+    )
+
+    signing_key, issuer = _resolve_signer(
+        key_path=key_path, issuer=issuer, spire=spire,
+        spire_socket=spire_socket, trust_domain=trust_domain,
+    )
+    if spire:
+        click.secho(f"Signing with live SPIRE SVID — issuer {issuer}", fg="cyan")
+
+    if calm:
+        paths = _emit_passports_from_calm(
+            calm, output_dir, trust_domain=trust_domain, issuer=issuer,
+            key_path=key_path, environment=environment, ttl_days=ttl_days,
+            inventory=inventory, signing_key=signing_key,
+            passport_version=passport_version,
+        )
+    else:
+        kg_doc = json.loads(Path(kg_file).read_text())
+        edges = _join_inventory(
+            edges_from_kg_workload(kg_doc, trust_domain=trust_domain), inventory
+        )
+        ownership = ownership_from_kg(kg_doc)
+        compliance = kg_doc.get("compliance_scope")
+        key = signing_key
+        issued_at = int(time.time())
+        expires_at = issued_at + ttl_days * 86400
+        paths = []
+        for edge in edges:
+            intent = {
+                "business_justification":
+                    f"{edge['source_workload']} → {edge['destination_workload']}"
+                    f" over {(edge.get('app_protocol') or ['tcp'])[0]}",
+                "environment": environment,
+                "requested_by": issuer,
+            }
+            if compliance:
+                intent["compliance_scope"] = compliance
+            passport = build_passport(
+                edge, intent, key, issuer,
+                issued_at=issued_at, expires_at=expires_at, ownership=ownership,
+                version=passport_version,
+            )
+            paths.append(write_passport(passport, Path(output_dir)))
+
+    if not paths:
+        click.secho("No relationship edges found — nothing emitted.", fg="yellow")
+        return
+    click.secho(f"Emitted {len(paths)} signed passport(s):", fg="green")
+    for path in paths:
+        click.echo(f"  {path}")
+
+
+@passport_group.command("announce")
+@click.argument("passport_file", type=click.Path(exists=True))
+@click.option(
+    "--anchor-ref",
+    default=None,
+    help="Accountability pointer, kg://anchor/<id> (ADR-010). Omitted when unknown "
+         "— never invented.",
+)
+@click.option(
+    "--supersedes",
+    default=None,
+    help="Previous passport id. Adds the forge.passport.superseded event (ADR-009 §2).",
+)
+def passport_announce_cmd(passport_file, anchor_ref, supersedes):
+    """Emit the OTel announcement for a signed passport (ADR-009).
+
+    Attribute names come from the generated semconv constants, so an unregistered
+    forge.* name cannot appear in the payload (ADR-014 §1). This is a join
+    accelerator, never proof.
+    """
+    from .passport_announce import announcement
+
+    passport = json.loads(Path(passport_file).read_text())
+    payload = announcement(
+        passport, anchor_ref=anchor_ref, superseded_passport_id=supersedes
+    )
+    click.echo(json.dumps(payload, indent=2, sort_keys=True))
+
+
+@passport_group.command("diff")
+@click.option("--flows", required=True, type=click.Path(exists=True),
+              help="Observed flows (JSON list or CSV) — identity-resolved stand-in for NetFlow")
+@click.option("--passports", "passports_dir", required=True, type=click.Path(exists=True),
+              help="Directory of *.passport.json claims")
+@click.option("--now", type=int, default=None, help="Evaluation epoch (defaults to now)")
+@click.option("--json", "as_json", is_flag=True, default=False, help="Emit raw JSON")
+def passport_diff_cmd(flows, passports_dir, now, as_json):
+    """Reverse diff: observed flows vs passport claims — the graph knows what the firewall doesn't.
+
+    Prints SHADOW FLOW (traffic with no claim), CONTRACTION CANDIDATE (claim not observed
+    or expired), and UNADJUDICABLE (the intent declares no port, so the edge cannot be
+    judged either way). Exits non-zero on the first two, so CI can gate on drift —
+    unadjudicable edges are a declaration gap, reported but not failed.
+    """
+    from .passport_diff import diff, load_observed_flows, load_passports
+
+    now = now if now is not None else int(time.time())
+    report = diff(load_passports(passports_dir), load_observed_flows(flows), now)
+
+    if as_json:
+        click.echo(json.dumps(report.to_dict(), indent=2))
+    else:
+        click.secho(
+            f"SHADOW {len(report.shadow)}  ·  CONTRACTION {len(report.contraction)}"
+            f"  ·  conformant {len(report.conformant)}"
+            f"  ·  UNADJUDICABLE {len(report.unadjudicable)}\n",
+            bold=True,
+        )
+        for entry in report.shadow:
+            click.secho(f"  SHADOW FLOW          {entry.source} → {entry.destination}", fg="red")
+            click.echo(f"    {entry.detail} · {entry.edge_id}")
+        for entry in report.contraction:
+            click.secho(f"  CONTRACTION CANDIDATE {entry.source} → {entry.destination}", fg="yellow")
+            click.echo(f"    {entry.detail} · {entry.edge_id}")
+        for entry in report.unadjudicable:
+            click.secho(f"  UNADJUDICABLE        {entry.source} → {entry.destination}", fg="cyan")
+            click.echo(f"    {entry.detail} · {entry.edge_id}")
+            if entry.observed_port is not None:
+                # the remediation, not just the complaint
+                click.echo(f"    observed on port {entry.observed_port} — declare it in intent")
+        if not report.has_findings and not report.has_gaps:
+            click.secho("  conformant — every flow has a current claim, every claim is observed.",
+                        fg="green")
+        elif not report.has_findings:
+            click.secho("  no drift — but some edges could not be judged (see above).", fg="green")
+
+    if report.has_findings:
+        sys.exit(1)
+
+
+@passport_group.command("revoke")
+@click.option("--passports", "passports_dir", required=True, type=click.Path(exists=True),
+              help="Directory of existing *.passport.json claims")
+@click.option("--edge-id", default=None, help="Revoke this specific kg://edges/... id")
+@click.option("--from-diff", "flows", default=None, type=click.Path(exists=True),
+              help="Revoke every CONTRACTION CANDIDATE found against these observed flows")
+@click.option("--output-dir", default=None, type=click.Path(),
+              help="Where to write tombstones (defaults to --passports)")
+@click.option("--issuer", default=_DEFAULT_ISSUER, help="SPIFFE id of the issuer (signer)")
+@click.option("--key", "key_path", default=None, type=click.Path(),
+              help="Ed25519 signing key (PEM). Generated + saved here if absent.")
+@click.option("--grace-days", default=30, type=int,
+              help="Days until the tombstone expires — the 'DELETE AFTER' date")
+@click.option("--now", type=int, default=None, help="Evaluation epoch (defaults to now)")
+def passport_revoke_cmd(passports_dir, edge_id, flows, output_dir, issuer, key_path,
+                        grace_days, now):
+    """Emit a signed `revoke` tombstone for a claim — contraction as a first-class object.
+
+    The tombstone reuses the grant's binding, so it shares its graph_ref.edge_id and
+    supersedes it in the reverse diff. Posture flips to the contraction side of the safety
+    split: tense=will-be, authority_class=autonomic-contraction.
+    """
+    if bool(edge_id) == bool(flows):
+        raise click.UsageError("Provide exactly one of --edge-id or --from-diff.")
+
+    from .passport import (
+        build_revoke_body,
+        edge_id_of,
+        sign_passport,
+        validate_passport,
+        write_passport,
+    )
+    from .passport_diff import diff, load_observed_flows, load_passports
+
+    now = now if now is not None else int(time.time())
+    passports = load_passports(passports_dir)
+
+    if edge_id:
+        targets = [edge_id]
+    else:
+        report = diff(passports, load_observed_flows(flows), now)
+        targets = [entry.edge_id for entry in report.contraction]
+
+    if not targets:
+        click.secho("No contraction candidates — nothing to revoke.", fg="green")
+        return
+
+    # latest grant per edge_id is the thing being revoked
+    grants = {}
+    for p in passports:
+        if p["claim"]["claim_type"] != "grant":
+            continue
+        eid = edge_id_of(p)
+        if eid not in grants or p["lifecycle"]["issued_at"] >= grants[eid]["lifecycle"]["issued_at"]:
+            grants[eid] = p
+
+    key, _ = _load_or_create_key(key_path)
+    out = Path(output_dir) if output_dir else Path(passports_dir)
+    written = []
+    for target in targets:
+        grant = grants.get(target)
+        if grant is None:
+            click.secho(f"No grant found for {target} — skipped.", fg="yellow", err=True)
+            continue
+        body = build_revoke_body(grant, issued_at=now, expires_at=now + grace_days * 86400)
+        tombstone = sign_passport(body, key, issuer)
+        validate_passport(tombstone)
+        written.append(write_passport(tombstone, out))
+
+    click.secho(f"Emitted {len(written)} signed tombstone(s) "
+                f"(tense=will-be, DELETE AFTER +{grace_days}d):", fg="yellow")
+    for path in written:
+        click.echo(f"  {path}")
+
+
+@passport_group.command("renew")
+@click.option("--passports", "passports_dir", required=True, type=click.Path(exists=True),
+              help="Directory of existing *.passport.json claims")
+@click.option("--output-dir", default=None, type=click.Path(),
+              help="Where to write renewed grants (defaults to --passports, superseding in place)")
+@click.option("--issuer", default=_DEFAULT_ISSUER, help="SPIFFE id of the issuer (signer)")
+@click.option("--key", "key_path", default=None, type=click.Path(),
+              help="Ed25519 signing key (PEM). Generated + saved here if absent.")
+@click.option("--within-days", default=30, type=int,
+              help="Renew grants lapsing within this many days")
+@click.option("--ttl-days", default=90, type=int,
+              help="Lifetime of the renewed grant from --now")
+@click.option("--now", type=int, default=None, help="Evaluation epoch (defaults to now)")
+def passport_renew_cmd(passports_dir, output_dir, issuer, key_path, within_days, ttl_days, now):
+    """Re-attest grants that are about to lapse — the renewal half of the control loop.
+
+    Every grant expiring within --within-days is re-signed with a fresh --ttl-days window.
+    The renewed grant keeps its graph_ref.edge_id, so it supersedes the lapsing one in the
+    reverse diff (same edge, later issued_at) rather than minting a second edge. Grants not
+    yet due are left untouched. A grant left to lapse becomes a contraction candidate — this
+    is what keeps it alive.
+    """
+    from .passport import edge_id_of, renew_passport, write_passport
+    from .passport_diff import load_passports
+    from .passport_seams import renewal_due
+
+    now = now if now is not None else int(time.time())
+    passports = load_passports(passports_dir)
+
+    # Renew the latest grant per edge — a stale duplicate shouldn't be re-issued.
+    grants: dict[str, dict] = {}
+    for p in passports:
+        if p["claim"]["claim_type"] != "grant":
+            continue
+        eid = edge_id_of(p)
+        if eid not in grants or p["lifecycle"]["issued_at"] >= grants[eid]["lifecycle"]["issued_at"]:
+            grants[eid] = p
+
+    due = renewal_due(list(grants.values()), now, within_days=within_days)
+    if not due:
+        click.secho(f"No grants lapse within {within_days}d — nothing to renew.", fg="green")
+        return
+
+    key, _ = _load_or_create_key(key_path)
+    out = Path(output_dir) if output_dir else Path(passports_dir)
+    written = []
+    for grant in due:
+        renewed = renew_passport(
+            grant, key, issuer, issued_at=now, expires_at=now + ttl_days * 86400
+        )
+        written.append(write_passport(renewed, out))
+
+    click.secho(f"Renewed {len(written)} grant(s) "
+                f"(fresh +{ttl_days}d window, edge_id preserved):", fg="green")
+    for path in written:
+        click.echo(f"  {path}")
+
+
+@passport_group.command("verify")
+@click.argument("passport_file", type=click.Path(exists=True))
+def passport_verify_cmd(passport_file):
+    """Verify a passport's Ed25519 signature and schema conformance."""
+    from .passport import edge_id_of, validate_passport, verify_passport
+
+    passport = json.loads(Path(passport_file).read_text())
+    try:
+        validate_passport(passport)
+    except Exception as exc:  # jsonschema.ValidationError
+        click.secho(f"SCHEMA INVALID: {exc}", fg="red", err=True)
+        sys.exit(1)
+
+    if verify_passport(passport):
+        edge_id = edge_id_of(passport)
+        click.secho(f"VERIFIED — signature valid, schema conformant\n  {edge_id}", fg="green")
+    else:
+        click.secho("SIGNATURE INVALID", fg="red", err=True)
+        sys.exit(1)
 
 
 @cli.group("kg")
@@ -868,11 +1851,16 @@ def kg_status_cmd(kg_dir, namespace, as_json, federated):
               help="Edge type to traverse from matched nodes, e.g. manifests_as")
 @click.option("--namespace", default=None,
               help="Namespace to query (subdirectory). '*' queries all namespaces.")
+@click.option("--plane", default=None,
+              type=click.Choice(sorted(_PLANES)),
+              help="Restrict to one authoring plane. Omit to return every plane — "
+                   "results are labelled either way. Reference nodes belong to no "
+                   "plane and never appear in a plane-filtered result.")
 @click.option("--json", "as_json", is_flag=True, default=False,
               help="Output raw JSON instead of formatted results")
 @click.option("--federated", is_flag=True, default=False,
               help="Use federation config from --kg-dir and query across all member roots")
-def kg_query_cmd(kg_dir, node_type, where, follow, namespace, as_json, federated):
+def kg_query_cmd(kg_dir, node_type, where, follow, namespace, plane, as_json, federated):
     """Query the live knowledge graph with predicate filters and optional edge traversal.
 
     \b
@@ -881,11 +1869,19 @@ def kg_query_cmd(kg_dir, node_type, where, follow, namespace, as_json, federated
       calm-forge kg query --kg-dir /tmp/kg --type ExecutionEnvironment --where status=ready
       calm-forge kg query --kg-dir /tmp/kg --type Placement --where region=us-east-1 --follow manifests_as
       calm-forge kg query --kg-dir /tmp/kg --type Workload --follow manifests_as
+      calm-forge kg query --kg-dir /tmp/kg --type Workload --plane controls
     """
     import json as _json
     from pathlib import Path as _Path
 
     from .kg_query import kg_query
+
+    if federated and plane:
+        raise click.UsageError(
+            "--plane is not supported with --federated yet: member roots are queried "
+            "through a separate path that has no plane filter. Query a single root, or "
+            "filter the --json output."
+        )
 
     if federated:
         from .kg_multi_root import MultiRootError as FederationError
@@ -914,7 +1910,10 @@ def kg_query_cmd(kg_dir, node_type, where, follow, namespace, as_json, federated
         return
 
     try:
-        results = kg_query(_Path(kg_dir), node_type, list(where), follow, namespace=namespace)
+        results = kg_query(
+            _Path(kg_dir), node_type, list(where), follow,
+            namespace=namespace, plane=plane,
+        )
     except ValueError as exc:
         raise click.UsageError(str(exc))
 
@@ -923,14 +1922,17 @@ def kg_query_cmd(kg_dir, node_type, where, follow, namespace, as_json, federated
         return
 
     if not results:
-        click.echo(f"No {node_type} nodes matched.")
+        scope = f" in plane {plane}" if plane else ""
+        click.echo(f"No {node_type} nodes matched{scope}.")
         return
 
     for entry in results:
         node = entry["node"]
         node_id = node.get("@id", "?")
         ntype = node.get("@type", node_type)
-        click.echo(click.style(f"{ntype}  {node_id}", bold=True))
+        label = entry.get("plane")
+        suffix = click.style(f"  [{label}]", fg="magenta") if label else ""
+        click.echo(click.style(f"{ntype}  {node_id}", bold=True) + suffix)
 
         # Print a handful of informative fields per type
         _print_node_summary(node, ntype)
@@ -1624,3 +2626,367 @@ def compile_policies(kg_dir):
         click.secho(f"  {f.name} ({f.stat().st_size} bytes)", fg="cyan")
 
 
+
+
+@kg_group.command("drift")
+@click.option("--kg-dir", required=True, type=click.Path(exists=True),
+              help="KG directory holding the plane nodes (the current-state side)")
+@click.option("--provenance", "provenance_paths", multiple=True, type=click.Path(exists=True),
+              help="SLSA provenance file(s) from generated artifacts (repeatable)")
+@click.option("--passports", "passports_dir", default=None, type=click.Path(exists=True),
+              help="Directory of *.passport.json claims")
+@click.option("--vsa", "vsa_paths", multiple=True, type=click.Path(exists=True),
+              help="Standing SLSA VSA file(s) from gate runs (repeatable)")
+@click.option("--json", "as_json", is_flag=True, default=False,
+              help="Output raw JSON instead of formatted findings")
+def kg_drift_cmd(kg_dir, provenance_paths, passports_dir, vsa_paths, as_json):
+    """Cross-plane drift: every part verifies, but is the whole still coherent?
+
+    Compares each artifact's and passport's digest-as-read against the graph's current
+    content digests. Comparison is by content, never by clock — a source touched but
+    not changed is not drift.
+
+    \b
+    Findings:
+      CONTROLS_NEWER_THAN_POLICY  plane node moved since compile   -> recompile (autonomic)
+      ORPHANED_POLICY             authoring gone, enforcement left -> escalate  (GOVERNED)
+      PLANE_MISSING               required plane unauthored        -> author    (GOVERNED)
+      STALE_ATTESTATION                 passport referent moved          -> re-issue  (autonomic)
+      ARCHETYPES_NEWER_THAN_PROMOTION   suite tightened since VSA       -> escalate  (GOVERNED)
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from .cross_plane_drift import GOVERNED, evaluate
+    from .kg_loader import load_patterns
+    from .passport_diff import load_passports
+
+    documents = load_patterns(_Path(kg_dir))
+    supply_dir = _Path(kg_dir) / "supply_chain"
+    if supply_dir.is_dir():
+        for path in sorted(supply_dir.glob("*.json")):
+            try:
+                data = _json.loads(path.read_text())
+            except (OSError, _json.JSONDecodeError):
+                continue
+            if isinstance(data, dict) and data.get("@id"):
+                documents.append(data)
+    statements = [_json.loads(_Path(p).read_text()) for p in provenance_paths]
+    passports = load_passports(passports_dir) if passports_dir else []
+    vsas = [_json.loads(_Path(p).read_text()) for p in vsa_paths]
+
+    report = evaluate(documents, statements, passports, vsas=vsas)
+
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2))
+        return
+
+    # Waivers render in their own section, never mixed into findings: "not here on
+    # purpose" and "required and unauthored" are different states, and collapsing them
+    # at the reporting layer would undo ADR-005 §5 exactly where an operator reads it.
+    if report.waivers:
+        click.secho(f"\nWaived by policy ({len(report.waivers)}) — governed absence, not a finding:",
+                    fg="cyan", bold=True)
+        for w in report.waivers:
+            click.echo(f"  {w.plane:<16} {w.subject}")
+            click.echo(f"  {'':<16} waived by {w.waived_by or '<unnamed rule>'}")
+
+    if not report.findings:
+        click.secho("\nNo cross-plane drift.", fg="green")
+        return
+
+    for finding in report.findings:
+        governed = finding.authority_class == GOVERNED
+        colour = "red" if governed else "yellow"
+        click.secho(f"\n{finding.finding_type}", fg=colour, bold=True)
+        click.echo(f"  subject     {finding.subject}")
+        if finding.plane:
+            click.echo(f"  plane       {finding.plane}")
+        if finding.node_id:
+            click.echo(f"  node        {finding.node_id}")
+        click.echo(f"  detail      {finding.detail}")
+        click.echo(
+            f"  action      {finding.remediation} "
+            + click.style(
+                "(GOVERNED — needs a human)" if governed else "(autonomic)", fg=colour
+            )
+        )
+
+    counts = report.to_dict()["counts"]
+    click.echo()
+    click.secho(
+        f"{counts['total']} finding(s): {counts['governed']} governed, "
+        f"{counts['autonomic']} autonomic.",
+        fg="red" if report.governed else "yellow",
+    )
+    # Governed findings assert that something is unauthorized or unauthored; acting on
+    # them changes what the fabric permits, so they are the ones that fail a gate.
+    if report.governed:
+        sys.exit(1)
+
+
+@cli.group("gate")
+def gate_group():
+    """The Gate — run archetype checks and emit signed SLSA VSAs (ADR-013)."""
+
+
+@gate_group.command("run")
+@click.option("--spec", "spec_path", required=True, type=click.Path(exists=True),
+              help="Gate spec JSON: {artifact, suite, checks, input_attestations?}")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="Directory to write vsa.slsa.json (+ DSSE envelope, quarantine record)")
+@click.option("--key", "key_path", default=None, type=click.Path(),
+              help="Ed25519 signing key (PEM) for the DSSE-signed VSA. Generated + saved "
+                   "here if absent. Without --key the VSA is written unsigned.")
+def gate_run_cmd(spec_path, output_dir, key_path):
+    """Run an artifact against its archetype checks and emit a VSA.
+
+    The spec supplies the artifact descriptor, the archetype-suite (uri + digest, or
+    content to hash), the checks to run, and the input attestations consumed. The verdict
+    is PASSED iff every check passes; on FAILED a quarantine record is written and the
+    command exits non-zero (fail closed for a promotion pipeline).
+    """
+    from pathlib import Path as _Path
+
+    from .gate_runner import (
+        RESULT_PASSED,
+        artifact_descriptor,
+        load_gate_spec,
+        run_gate,
+        suite_descriptor,
+        write_gate_result,
+    )
+    from .passport import generate_keypair, load_private_key, save_private_key
+
+    spec = load_gate_spec(spec_path)
+
+    artifact = spec.get("artifact") or {}
+    if "uri" in artifact and "digest" not in artifact:
+        artifact = artifact_descriptor(artifact["uri"], artifact.get("digest_sha256", ""))
+
+    suite_in = spec.get("suite") or {}
+    if "digest" not in suite_in:
+        suite = suite_descriptor(
+            suite_in.get("uri", "kg://supply_chain/archetype-suite/unversioned"),
+            content=suite_in.get("content"),
+            digest_sha256=suite_in.get("digest_sha256"),
+        )
+    else:
+        suite = suite_in
+
+    key = None
+    if key_path is not None:
+        kp = _Path(key_path)
+        if kp.exists():
+            key = load_private_key(kp)
+        else:
+            key = generate_keypair()
+            save_private_key(key, kp)
+
+    result = run_gate(
+        artifact=artifact,
+        suite=suite,
+        checks=spec.get("checks") or [],
+        input_attestations=spec.get("input_attestations"),
+        key=key,
+    )
+    paths = write_gate_result(result, output_dir)
+
+    colour = "green" if result.passed else "red"
+    click.secho(f"Gate {result.result} — {artifact.get('uri', '<artifact>')}", fg=colour, bold=True)
+    for outcome in result.outcomes:
+        mark = "ok  " if outcome.passed else "FAIL"
+        arch = f" [{outcome.archetype}]" if outcome.archetype else ""
+        click.echo(f"  {mark} {outcome.name}{arch}: {outcome.detail}")
+    click.echo("")
+    for path in paths:
+        click.echo(f"  wrote {path}")
+
+    if result.result != RESULT_PASSED:
+        raise SystemExit(1)
+
+
+@gate_group.command("countersign")
+@click.option("--envelope", "envelope_path", required=True, type=click.Path(exists=True),
+              help="DSSE-signed VSA from `gate run` (vsa.slsa.dsse.json)")
+@click.option("--key", "key_path", required=True, type=click.Path(),
+              help="Ed25519 countersigner key (PEM). Generated + saved here if absent.")
+@click.option("--anchor-ref", required=True,
+              help="kg://anchor/<id> of the accountable human (ADR-010). Required — "
+                   "the countersignature resolves through this, never a name.")
+@click.option("--output", "output_path", required=True, type=click.Path(),
+              help="Where to write the countersigned envelope")
+def gate_countersign_cmd(envelope_path, key_path, anchor_ref, output_path):
+    """Add the app-tier countersignature on a gate VSA (ADR-013 §2).
+
+    Two signatures, one subject: the automated gate and the accountable human
+    approve the same digest. Promotion is governed-expansion — this is the human.
+    """
+    from pathlib import Path as _Path
+
+    from .gate_admission import AdmissionError, countersign_envelope
+    from .passport import generate_keypair, load_private_key, save_private_key
+
+    envelope = json.loads(_Path(envelope_path).read_text())
+    kp = _Path(key_path)
+    if kp.exists():
+        key = load_private_key(kp)
+    else:
+        key = generate_keypair()
+        save_private_key(key, kp)
+    try:
+        signed = countersign_envelope(envelope, key, anchor_ref=anchor_ref)
+    except AdmissionError as exc:
+        click.secho(str(exc), fg="red", err=True)
+        raise SystemExit(1) from exc
+    out = _Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(signed, indent=2) + "\n")
+    click.secho(f"Countersigned — {anchor_ref}", fg="green")
+    click.echo(f"  wrote {out}")
+
+
+@gate_group.command("admit")
+@click.option("--envelope", "envelope_path", required=True, type=click.Path(exists=True),
+              help="Countersigned DSSE VSA")
+@click.option("--gate-key", "gate_key_path", required=True, type=click.Path(exists=True),
+              help="Gate signer PEM — public key is derived (crawl-stage trust source)")
+@click.option("--countersigner-key", "counter_key_path", required=True,
+              type=click.Path(exists=True),
+              help="Countersigner PEM — public key is derived")
+@click.option("--pull", "pull_ref", required=True,
+              help="The production pull reference. Must be a digest pin "
+                   "(name@sha256:… or sha256:…). Tags are rejected.")
+@click.option("--anchors", "anchors_path", required=True, type=click.Path(exists=True),
+              help="AccountabilityAnchor nodes (JSON list or {reference_nodes: […]})")
+@click.option("--gate-unavailable", is_flag=True, default=False,
+              help="Gate is down. Promotion fails closed; quarantine is unaffected "
+                   "(ADR-013 follow-up 7).")
+def gate_admit_cmd(envelope_path, gate_key_path, counter_key_path, pull_ref,
+                   anchors_path, gate_unavailable):
+    """Tier 3 admission: verify the VSA chain and enforce the digest pin.
+
+    Stock DSSE verification of both signatures, subject digest matches the pull,
+    countersignature resolves to a human via the anchor chain. Exits non-zero on
+    any failure — fail closed (ADR-013 §1).
+    """
+    from pathlib import Path as _Path
+
+    from .gate_admission import AdmissionError, admit, load_anchors
+    from .passport import load_private_key, public_key_b64
+
+    envelope = json.loads(_Path(envelope_path).read_text())
+    try:
+        decision = admit(
+            envelope,
+            gate_public_key_b64=public_key_b64(load_private_key(gate_key_path)),
+            countersigner_public_key_b64=public_key_b64(load_private_key(counter_key_path)),
+            pull_ref=pull_ref,
+            anchors=load_anchors(anchors_path),
+            gate_available=not gate_unavailable,
+        )
+    except AdmissionError as exc:
+        click.secho(f"REFUSED — {exc}", fg="red", bold=True)
+        raise SystemExit(1) from exc
+    click.secho("ADMITTED", fg="green", bold=True)
+    click.echo(f"  digest      sha256:{decision.subject_digest}")
+    click.echo(f"  policy      sha256:{decision.policy_digest}")
+    click.echo(f"  anchor      {decision.anchor_ref}")
+    click.echo(f"  authority   {decision.authority_class}")
+
+
+@cli.group("registry")
+def registry_group():
+    """Ingest vendor drops into the supply_chain plane (ADR-013 §5)."""
+
+
+@registry_group.command("intake")
+@click.option("--sbom", "sbom_path", required=True, type=click.Path(exists=True),
+              help="CycloneDX or SPDX SBOM JSON for the drop")
+@click.option("--image-ref", required=True, help="Human image tag (never the identity)")
+@click.option("--image-digest", required=True,
+              help="Image content digest (sha256:...) — the drop's identity")
+@click.option("--layers", "layers_path", default=None, type=click.Path(exists=True),
+              help="Optional layer map JSON: {layers:[{digest, packages:[purl|name]}]}")
+@click.option("--output-dir", required=True, type=click.Path(),
+              help="KG directory to write supply_chain-plane nodes")
+@click.option("--namespace", default=None,
+              help="Namespace subdirectory to write nodes into (multi-tenant KG)")
+def registry_intake_cmd(sbom_path, image_ref, image_digest, layers_path, output_dir, namespace):
+    """Ingest one vendor drop into supply_chain-plane image/layer/package nodes.
+
+    The image node is keyed by its content digest, not its tag. Packages resolve from the
+    SBOM; when a layer map is supplied the graph carries image → layer → package, otherwise
+    image → package. Exits 1 if the drop yields gaps a reviewer should see (e.g. an SBOM
+    with zero packages).
+    """
+    from pathlib import Path as _Path
+
+    from .kg_namespace import resolve_kg_dir
+    from .registry_intake import intake_drop_from_file, write_supply_chain_nodes
+
+    result = intake_drop_from_file(
+        sbom_path, image_ref=image_ref, image_digest=image_digest, layers_path=layers_path
+    )
+    nodes = result["supply_chain_nodes"]
+    paths = write_supply_chain_nodes(nodes, resolve_kg_dir(_Path(output_dir), namespace))
+
+    counts = {}
+    for node in nodes:
+        counts[node["@type"]] = counts.get(node["@type"], 0) + 1
+    summary = ", ".join(f"{n} {t}" for t, n in sorted(counts.items()))
+    click.secho(f"Wrote {len(paths)} supply_chain node(s) — {summary}", fg="green")
+    click.echo(f"  {len(result['edges'])} within-plane edge(s)")
+
+    gaps = result["gaps"]
+    if gaps:
+        click.secho(f"\n{len(gaps)} gap(s):", fg="yellow", bold=True)
+        for gap in gaps:
+            click.secho(f"  {gap}", fg="yellow")
+        raise SystemExit(1)
+
+
+@registry_group.command("affected")
+@click.option("--before", "before_path", required=True, type=click.Path(exists=True),
+              help="SBOM of drop N")
+@click.option("--after", "after_path", required=True, type=click.Path(exists=True),
+              help="SBOM of drop N+1")
+@click.option("--archetypes", "archetypes_path", required=True, type=click.Path(exists=True),
+              help="Archetype suite JSON: {archetypes:[{name, dependency_surface}]}")
+def registry_affected_cmd(before_path, after_path, archetypes_path):
+    """Select the archetypes the Gate must run for an N → N+1 drop diff.
+
+    The diff is a traversal over two drops; an archetype is affected iff its dependency
+    surface intersects the diff. The Gate runs exactly these, not the full suite.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from .registry_intake import (
+        diff_drops,
+        intake_drop,
+        select_affected_archetypes,
+    )
+
+    def _nodes(path):
+        sbom = _json.loads(_Path(path).read_text())
+        # image_ref/digest are irrelevant to the diff — key only on packages
+        return intake_drop(sbom, image_ref=str(path), image_digest="sha256:" + "0" * 64)
+
+    diff = diff_drops(_nodes(before_path), _nodes(after_path))
+    suite = _json.loads(_Path(archetypes_path).read_text())
+    archetypes = suite.get("archetypes", suite) if isinstance(suite, dict) else suite
+    affected = select_affected_archetypes(diff, archetypes)
+
+    click.secho(
+        f"Diff: +{len(diff.added)} added, -{len(diff.removed)} removed, "
+        f"~{len(diff.changed)} changed", fg="cyan")
+    for change in diff.changed:
+        click.echo(f"  ~ {change.ecosystem}/{change.name}: {change.from_version} → {change.to_version}")
+    if affected:
+        click.secho(f"\n{len(affected)} affected archetype(s) — the Gate runs these:", fg="green")
+        for name in affected:
+            click.echo(f"  {name}")
+    else:
+        click.secho("\nNo affected archetypes — diff touches nothing any persona exercises.",
+                    fg="yellow")

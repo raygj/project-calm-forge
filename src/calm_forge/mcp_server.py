@@ -603,6 +603,7 @@ def _kg_query(
     where: list[str] | None = None,
     follow: str | None = None,
     namespace: str | None = None,
+    plane: str | None = None,
 ) -> dict:
     """Query the live knowledge graph with predicate filters and optional edge traversal.
 
@@ -619,10 +620,22 @@ def _kg_query(
         follow:     Edge type to traverse from each matched node.
                     Currently supported: "manifests_as"
         namespace:  Optional namespace name. Pass "*" to query all namespaces.
+        plane:      Optional authoring plane: "architecture", "controls",
+                    "business_intent", "data_management", "supply_chain".
+                    Omit to return every plane — results carry a "plane" label either
+                    way. Reference nodes (vocabulary the planes point into) belong to
+                    no plane and never appear in a plane-filtered result.
     """
+    from .kg_plane import PlaneError
     from .kg_query import kg_query
-    results = kg_query(Path(kg_dir), node_type, where or [], follow, namespace=namespace)
-    return {"results": results, "count": len(results)}
+    try:
+        results = kg_query(
+            Path(kg_dir), node_type, where or [], follow,
+            namespace=namespace, plane=plane,
+        )
+    except PlaneError as exc:
+        return {"error": str(exc), "results": [], "count": 0}
+    return {"results": results, "count": len(results), "plane": plane}
 
 
 # ---------------------------------------------------------------------------

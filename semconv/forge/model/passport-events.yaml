@@ -1,0 +1,43 @@
+# Log events — passport lifecycle (ADR-009 §2). Structured events on the existing log
+# pipeline; each event references the §1 resource attributes rather than re-minting them.
+groups:
+  - id: event.forge.passport.announced
+    type: event
+    name: forge.passport.announced
+    stability: development
+    brief: >
+      Emitted on workload start and on passport rotation. The standing announcement in
+      event form; the body additionally carries the graph_refs plane keys by name only —
+      which planes are present or waived, never their contents (ADR-009 §2).
+    attributes:
+      - ref: forge.passport.id
+      - ref: forge.passport.edge_digest
+      - ref: forge.passport.expires
+      - ref: forge.anchor.ref
+      - ref: forge.workload.urn
+
+  - id: event.forge.passport.expiring
+    type: event
+    name: forge.passport.expiring
+    stability: development
+    brief: >
+      Emitted by the workload or the Collector processor inside a configurable pre-expiry
+      window, so imminent expiry is a signal rather than a silent lapse (ADR-009 §2).
+    attributes:
+      - ref: forge.passport.id
+      - ref: forge.passport.expires
+      - ref: forge.workload.urn
+
+  - id: event.forge.passport.superseded
+    type: event
+    name: forge.passport.superseded
+    stability: development
+    brief: >
+      Emitted on re-issue. forge.passport.id carries the NEW passport id; the superseded
+      (previous) passport id travels in the event body as superseded_passport_id — an
+      event-local body field, not a resource attribute, so v0.1 holds at exactly five
+      forge.* attributes rather than minting a sixth for a value that never stands alone
+      (ADR-009 §2).
+    attributes:
+      - ref: forge.passport.id
+      - ref: forge.workload.urn

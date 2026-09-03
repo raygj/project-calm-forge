@@ -109,11 +109,11 @@ def test_upsert_trust_domain_params():
         "@type": "TrustDomain",
         "spiffe_uri_prefix": "spiffe://prod.fsi",
         "commune": "forge",
-        "peer_trust_domains": ["trust_domain:peer.prod"],
+        "peer_trust_domains": ["trust_domain:starfly.prod"],
     })
     q, p = graph.queries[-1]
     assert "MERGE (t:TrustDomain {id: $id})" in q
-    assert p["peer_trust_domains"] == ["trust_domain:peer.prod"]
+    assert p["peer_trust_domains"] == ["trust_domain:starfly.prod"]
 
 
 def test_upsert_environment_flattens_compliance_label():

@@ -29,7 +29,9 @@
         "http_read",
         "http_write",
         "tls_termination"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -41,7 +43,9 @@
         "http_write",
         "vault_dynamic_creds",
         "mtls_client"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "WorkloadComponent",
@@ -52,7 +56,9 @@
         "postgres_read",
         "postgres_write",
         "encryption_at_rest"
-      ]
+      ],
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
   "relationships": [
@@ -84,7 +90,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.placement.label_constraint",
       "provenance": "authored",
-      "rationale": "Cardholder data must be processed only on PCI-designated clusters"
+      "rationale": "Cardholder data must be processed only on PCI-designated clusters",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -99,7 +107,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.placement.isolation_constraint",
       "provenance": "authored",
-      "rationale": "PCI req-1: database tier must not share execution environment with non-PCI workloads"
+      "rationale": "PCI req-1: database tier must not share execution environment with non-PCI workloads",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -114,7 +124,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.placement.region_constraint",
       "provenance": "authored",
-      "rationale": "Cardholder data jurisdiction constraint \u2014 no placement in regions without PCI-DSS compliant infrastructure"
+      "rationale": "Cardholder data jurisdiction constraint \u2014 no placement in regions without PCI-DSS compliant infrastructure",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -125,7 +137,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.capability.requirement_check",
       "provenance": "authored",
-      "rationale": "PCI req-7/req-8: static credentials prohibited, dynamic credentials via Vault required"
+      "rationale": "PCI req-7/req-8: static credentials prohibited, dynamic credentials via Vault required",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Policy",
@@ -137,7 +151,9 @@
       "enforcement_mode": "enforce",
       "evaluated_by": "calm.lifecycle.cert_expiry_check",
       "provenance": "authored",
-      "rationale": "PCI req-4: expired TLS certificates must trigger immediate alert and remediation"
+      "rationale": "PCI req-4: expired TLS certificates must trigger immediate alert and remediation",
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
   "compliance_nodes": [
@@ -146,21 +162,27 @@
       "@id": "compliance:PCI-DSS-v4:req-1",
       "framework": "PCI-DSS-v4",
       "control_id": "req-1",
-      "requirement_text": "Install and maintain network security controls"
+      "requirement_text": "Install and maintain network security controls",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Compliance",
       "@id": "compliance:PCI-DSS-v4:req-7",
       "framework": "PCI-DSS-v4",
       "control_id": "req-7",
-      "requirement_text": "Restrict access to system components and cardholder data by business need to know"
+      "requirement_text": "Restrict access to system components and cardholder data by business need to know",
+      "node_class": "authored",
+      "plane": "architecture"
     },
     {
       "@type": "Compliance",
       "@id": "compliance:PCI-DSS-v4:req-8",
       "framework": "PCI-DSS-v4",
       "control_id": "req-8",
-      "requirement_text": "Identify users and authenticate access to system components"
+      "requirement_text": "Identify users and authenticate access to system components",
+      "node_class": "authored",
+      "plane": "architecture"
     }
   ],
   "edges": [
@@ -209,5 +231,7 @@
       "from": "workload:3tier-pci:db-tier",
       "to": "capability:encryption_at_rest"
     }
-  ]
+  ],
+  "node_class": "authored",
+  "plane": "architecture"
 }

@@ -1,0 +1,81 @@
+{
+  "passport_version": "0.2",
+  "passport_id": "7c2d9f11-4e8a-4b63-9d20-6f3b1a8c5e92",
+  "spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/web-frontend",
+  "intent_metadata": {
+    "business_justification": "Frontend calls API over HTTPS with mTLS",
+    "environment": "production",
+    "requested_by": "spiffe://prod.fsi/ns/payments-portal/sa/web-frontend",
+    "ticket_id": "SEC-8841",
+    "compliance_scope": [
+      "PCI-DSS-v4:req-1.3.1",
+      "PCI-DSS-v4:req-4.2.1"
+    ],
+    "data_classification": "confidential"
+  },
+  "network_binding": {
+    "source_workload": "web-frontend",
+    "source_workload_urn": "wl:payments-portal/web-frontend",
+    "destination_workload": "api-service",
+    "destination_workload_urn": "wl:payments-portal/api-service",
+    "transport": "tcp",
+    "direction": "egress",
+    "source_spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/web-frontend",
+    "destination_spiffe_id": "spiffe://prod.fsi/ns/payments-portal/sa/api-service",
+    "app_protocol": [
+      "HTTPS",
+      "mTLS"
+    ],
+    "authentication": "mTLS-vault-pki",
+    "port": 8443,
+    "port_source": "declared-interface"
+  },
+  "claim": {
+    "claim_type": "grant",
+    "tense": "should-be",
+    "authority_class": "governed-expansion"
+  },
+  "graph_refs": {
+    "architecture": {
+      "node_id": "kg://edges/v1/6cddff5734fc8c2b0a9ab2c318873f62b409e83109e7b6b54a0d1b91ea20b2aa",
+      "source": "declared",
+      "confidence": 1.0,
+      "authored_by": "calm-forge/fsi-3tier-instantiation",
+      "authored_at": "2026-02-22T14:30:00Z"
+    },
+    "controls": {
+      "node_id": "kg://oscal/control/AC-3/imp-req-ac3-e7f2",
+      "source": "declared",
+      "confidence": 1.0,
+      "authored_by": "fsi-cyber/oscal-catalog-v2",
+      "authored_at": "2026-06-15T00:00:00Z",
+      "node_version": "sha256:4e97bb250fd7c93837ef4cf5e269878db90fc9b1c16693ab3558aac0da4f4b9e"
+    },
+    "business_intent": {
+      "node_id": "kg://tosca/policy/payments-portal/web-to-api-availability",
+      "source": "declared",
+      "confidence": 1.0,
+      "authored_by": "payments-engineering/tosca-topology-v3",
+      "authored_at": "2026-05-04T00:00:00Z",
+      "node_version": "sha256:45306519aae5ffe176c12197a7f4889ab01966892d02399a92170161ab406249"
+    }
+  },
+  "lifecycle": {
+    "issued_at": 1771770600,
+    "expires_at": 1803306600
+  },
+  "ownership": {
+    "team": "payments-engineering",
+    "cost_center": "CC-4521",
+    "application_name": "payments-portal",
+    "sla_tier": "platinum",
+    "owner": "payments-engineering"
+  },
+  "proof": {
+    "issuer": "spiffe://prod.fsi/ns/platform/sa/calm-forge",
+    "algorithm": "ed25519",
+    "canonicalization": "jcs",
+    "public_key_b64": "IkL1e1rBpQdHGwlxo3kvc41Rk9m/l2kuVf9Q+ILBIUU=",
+    "signature_b64": "R+6swagYCUALjg1Ku7uhZOVmU8dXOkbmeyTP3dHc7gy93TLLsy+EwDsLl42VQdiBZr2F8oRnPKq6ltr8LgplAQ=="
+  }
+}

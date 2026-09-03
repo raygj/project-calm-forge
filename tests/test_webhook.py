@@ -2,8 +2,10 @@
 
 import hashlib
 import hmac
+import io
 import json
 import os
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -11,7 +13,7 @@ import pytest
 from fastapi import HTTPException
 
 import calm_forge.webhook as webhook_module
-from calm_forge.webhook import handle_webhook
+from calm_forge.webhook import _commit_github_file, _get_file_sha, handle_webhook
 
 EXAMPLES_DIR = Path(__file__).parent.parent / "examples" / "fsi-3tier"
 
@@ -192,3 +194,98 @@ def test_github_fetch_error_captured_in_errors():
         webhook_module._WEBHOOK_SECRET = ""
         webhook_module._CATALOG_PATH = ""
         webhook_module._DECORATOR_PATH = ""
+
+
+# ---------------------------------------------------------------------------
+# GitHub write path — _get_file_sha + _commit_github_file
+#
+# Previously untested: these mutate the target repo. The create-vs-update
+# branch is the load-bearing bit — GitHub's Contents API requires the existing
+# blob SHA to update a file, and omits it to create one.
+# ---------------------------------------------------------------------------
+
+class _FakeResp(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_get_file_sha_returns_blob_sha_on_success():
+    body = json.dumps({"sha": "blob-abc"}).encode()
+    with patch("urllib.request.urlopen", return_value=_FakeResp(body)):
+        assert _get_file_sha("o", "r", "p", "main") == "blob-abc"
+
+
+def test_get_file_sha_returns_none_when_file_absent():
+    """A 404 means the file doesn't exist yet — None tells the caller to create,
+    not update. (Any HTTPError is treated the same; a stale-SHA update then
+    surfaces as a ConnectionError from the PUT rather than here.)"""
+    err = urllib.error.HTTPError("u", 404, "nf", {}, None)
+    with patch("urllib.request.urlopen", side_effect=err):
+        assert _get_file_sha("o", "r", "p", "main") is None
+
+
+def test_commit_skips_silently_when_no_target_repo_configured():
+    calls = []
+    with patch.object(webhook_module, "_TARGET_OWNER", ""), patch.object(
+        webhook_module, "_TARGET_REPO", ""
+    ), patch("urllib.request.urlopen", side_effect=lambda req: calls.append(req)):
+        _commit_github_file("generated/x.hcl", "content", "msg")
+    assert calls == []
+
+
+def test_commit_new_file_omits_sha_from_payload():
+    """No existing blob → create: the PUT payload must not carry a `sha`."""
+    captured = {}
+
+    def _fake(req):
+        if req.get_method() == "PUT":
+            captured["payload"] = json.loads(req.data.decode())
+            return _FakeResp(b"{}")
+        raise urllib.error.HTTPError("u", 404, "nf", {}, None)  # GET for sha
+
+    with patch.object(webhook_module, "_TARGET_OWNER", "org"), patch.object(
+        webhook_module, "_TARGET_REPO", "repo"
+    ), patch.object(webhook_module, "_TARGET_BRANCH", "main"), patch(
+        "urllib.request.urlopen", side_effect=_fake
+    ):
+        _commit_github_file("generated/x.hcl", "content", "msg")
+
+    assert "sha" not in captured["payload"]
+    assert captured["payload"]["branch"] == "main"
+
+
+def test_commit_existing_file_includes_sha_for_update():
+    """Existing blob → update: the PUT payload must carry the current `sha`,
+    or GitHub rejects the write."""
+    captured = {}
+
+    def _fake(req):
+        if req.get_method() == "PUT":
+            captured["payload"] = json.loads(req.data.decode())
+            return _FakeResp(b"{}")
+        return _FakeResp(json.dumps({"sha": "existing-sha"}).encode())  # GET for sha
+
+    with patch.object(webhook_module, "_TARGET_OWNER", "org"), patch.object(
+        webhook_module, "_TARGET_REPO", "repo"
+    ), patch.object(webhook_module, "_TARGET_BRANCH", "main"), patch(
+        "urllib.request.urlopen", side_effect=_fake
+    ):
+        _commit_github_file("generated/x.hcl", "content", "msg")
+
+    assert captured["payload"]["sha"] == "existing-sha"
+
+
+def test_commit_raises_connectionerror_on_put_failure():
+    def _fake(req):
+        if req.get_method() == "PUT":
+            raise urllib.error.HTTPError("u", 422, "unprocessable", {}, None)
+        raise urllib.error.HTTPError("u", 404, "nf", {}, None)
+
+    with patch.object(webhook_module, "_TARGET_OWNER", "org"), patch.object(
+        webhook_module, "_TARGET_REPO", "repo"
+    ), patch("urllib.request.urlopen", side_effect=_fake):
+        with pytest.raises(ConnectionError):
+            _commit_github_file("generated/x.hcl", "content", "msg")

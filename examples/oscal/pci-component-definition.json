@@ -1,0 +1,71 @@
+{
+  "component-definition": {
+    "uuid": "c0ffee00-1111-4222-8333-444455556666",
+    "metadata": {
+      "title": "3-tier PCI workload — component definition (illustrative)",
+      "version": "1.0.0",
+      "oscal-version": "1.1.2"
+    },
+    "components": [
+      {
+        "uuid": "aaaa1111-2222-4333-8444-555566667777",
+        "type": "service",
+        "title": "payments database tier",
+        "description": "Stores cardholder data for the 3-tier PCI workload.",
+        "props": [
+          {"name": "governs", "value": "workload:3tier-pci:db-tier"}
+        ],
+        "control-implementations": [
+          {
+            "uuid": "bbbb1111-2222-4333-8444-555566667777",
+            "source": "#9f5b1d1e-0f6a-4b2c-8a4a-1c2d3e4f5a6b",
+            "description": "PCI DSS v4 stored-data controls as implemented by the database tier.",
+            "set-parameters": [
+              {"param-id": "minimum-key-length", "values": ["256"]}
+            ],
+            "implemented-requirements": [
+              {
+                "uuid": "1111aaaa-2222-4333-8444-555566667777",
+                "control-id": "req-3.5.1",
+                "description": "PAN is stored only in encrypted columns; keys are held in Vault transit."
+              },
+              {
+                "uuid": "2222aaaa-2222-4333-8444-555566667777",
+                "control-id": "req-3.6.1",
+                "description": "Vault transit keys rotate on the baseline schedule."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "cccc1111-2222-4333-8444-555566667777",
+        "type": "service",
+        "title": "payments api tier",
+        "description": "Terminates client TLS and calls the database tier.",
+        "control-implementations": [
+          {
+            "uuid": "dddd1111-2222-4333-8444-555566667777",
+            "source": "#9f5b1d1e-0f6a-4b2c-8a4a-1c2d3e4f5a6b",
+            "description": "PCI DSS v4 transmission controls as implemented by the API tier.",
+            "implemented-requirements": [
+              {
+                "uuid": "3333aaaa-2222-4333-8444-555566667777",
+                "control-id": "req-4.2.1",
+                "description": "mTLS between the API and database tiers, TLS 1.3 at the edge.",
+                "props": [
+                  {"name": "governs", "value": "workload:3tier-pci:api-tier"},
+                  {"name": "governs", "value": "kg://edges/v1/2f3c8a0d5e6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d"}
+                ],
+                "set-parameters": [
+                  {"param-id": "minimum-tls-version", "values": ["1.3"]},
+                  {"param-id": "mutual-tls-required", "values": ["true"]}
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
